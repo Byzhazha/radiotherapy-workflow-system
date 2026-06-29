@@ -97,7 +97,7 @@ async function executeAiJob({ store, job, aiClient, giteaClient, storage }) {
       job.sourceControl = await giteaClient.upsertFile({
         filePath: `ai-deliveries/${job.id}.json`,
         content: `${JSON.stringify(manifest, null, 2)}\n`,
-        message: `AI定制交付：${plan.title}`
+        message: `AI定制变更：${plan.title}`
       });
       markStage(job, 'source-control', 'done', `已提交 ${job.sourceControl.owner}/${job.sourceControl.repo}@${job.sourceControl.branch}`);
     } else {
