@@ -16,7 +16,7 @@ REMOTE_DIR = "/opt/rt-ai-workbench"
 SERVICE_NAME = "rt-ai-workbench"
 REMOTE_ENV = """AI_BASE_URL=https://zz1cc.cc.cd/v1
 AI_API_KEY=sk-RdXVPFHMvqx2e6K26s0dDeeyDsjMC90aik4p0jqm4HqUuJBk
-AI_MODEL=gpt-5.4-mini
+AI_MODEL=gpt-5.5
 RT_API_PORT=8750
 RT_API_HOST=0.0.0.0
 GITEA_BASE_URL=https://gitea.jaycode.online

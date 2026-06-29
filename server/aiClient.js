@@ -2,7 +2,7 @@ export class OpenAiCompatibleClient {
   constructor({ baseUrl, apiKey, model }) {
     this.baseUrl = baseUrl?.replace(/\/$/, '');
     this.apiKey = apiKey;
-    this.model = model || 'gpt-5.4-mini';
+    this.model = model || 'gpt-5.5';
   }
 
   isConfigured() {

@@ -10,17 +10,14 @@ import {
   ChevronRight,
   ClipboardCheck,
   Code2,
-  Database,
   FileText,
   FlaskConical,
-  GitBranch,
   HeartPulse,
   LayoutDashboard,
   ListChecks,
   Loader2,
   MonitorCog,
   Play,
-  RefreshCw,
   ShieldCheck,
   Stethoscope,
   TestTube2,
@@ -150,14 +147,6 @@ function App() {
           })}
         </nav>
 
-        <div className="system-card">
-          <span className="system-label">后端服务</span>
-          <strong>{apiBaseUrl.replace('http://', '')}</strong>
-          <button className="ghost-button compact" onClick={() => refreshAll()} title="刷新数据">
-            <RefreshCw size={15} />
-            刷新
-          </button>
-        </div>
       </aside>
 
       <main className="workspace">
@@ -241,7 +230,7 @@ function Overview({ state, onOpenPatient }) {
 
       <div className="content-grid two">
         <section className="panel">
-          <PanelHeader icon={Workflow} title="当前放疗流程" subtitle={`版本 ${state.workflow.activeVersion} · ${state.workflow.steps.length} 个节点`} />
+          <PanelHeader icon={Workflow} title="当前放疗流程" subtitle={`按患者从登记到随访的实际顺序展示 · 目标时间为科室内部流转要求`} />
           <WorkflowRail workflow={state.workflow} compact />
         </section>
 
@@ -292,13 +281,13 @@ function Overview({ state, onOpenPatient }) {
         </section>
 
         <section className="panel">
-          <PanelHeader icon={GitBranch} title="系统版本记录" subtitle="流程发布与审计" />
+          <PanelHeader icon={ClipboardCheck} title="最近定制记录" subtitle="AI变更与流程发布结果" />
           <div className="deployment-list">
             {state.dashboard.deployments.map((deployment) => (
               <div className="deployment-item" key={deployment.id}>
                 <strong>{deployment.version}</strong>
                 <span>{deployment.title}</span>
-                <small>{deployment.status}</small>
+                <small>{deliveryStatusLabel(deployment.status)}</small>
               </div>
             ))}
           </div>
@@ -664,14 +653,25 @@ function CustomizationAssistant({ state, onRefresh }) {
   }
 
   const latestJob = state.aiJobs[0];
+  const recentDeliveryLogs = state.auditLog.filter((log) => ['complete-ai-job', 'apply-change-plan'].includes(log.action)).slice(0, 5);
 
   return (
     <div className="ai-layout">
       <section className="panel ai-console">
-        <PanelHeader icon={Bot} title="AI 定制助手" subtitle="面向开发/实施人员的自动交付入口" />
-        <div className="integration-strip">
-          <IntegrationBadge icon={GitBranch} label="Gitea" value={state.integrations?.gitea?.enabled ? `${state.integrations.gitea.owner}/${state.integrations.gitea.repo}` : '未配置'} />
-          <IntegrationBadge icon={Workflow} label="Jenkins" value={state.integrations?.jenkins?.enabled ? '外部流水线已接入' : '可选扩展'} />
+        <PanelHeader icon={Bot} title="下达定制需求" subtitle="面向开发/实施人员，直接输入医院提出的流程改动" />
+        <div className="assistant-summary">
+          <div>
+            <strong>直接下任务</strong>
+            <span>输入一句需求，点击生成，系统会修改当前流程/表单/规则。</span>
+          </div>
+          <div>
+            <strong>执行过程</strong>
+            <span>提交后会展示理解需求、生成计划、修改系统、自动测试和发布预览。</span>
+          </div>
+          <div>
+            <strong>交付留痕</strong>
+            <span>成功后保存变更计划、测试结果和发布记录，方便复盘与回滚。</span>
+          </div>
         </div>
         <textarea value={requirement} onChange={(event) => setRequirement(event.target.value)} />
         <div className="sample-row">
@@ -689,19 +689,19 @@ function CustomizationAssistant({ state, onRefresh }) {
       </section>
 
       <section className="panel">
-        <PanelHeader icon={GitBranch} title="最新定制任务" subtitle="需求、计划、测试、发布全链路留痕" />
+        <PanelHeader icon={Activity} title="执行结果" subtitle="AI 会依次完成需求理解、系统变更、自动测试和发布预览" />
         {latestJob ? <JobDetail job={latestJob} /> : <div className="empty-state">暂无AI变更任务。</div>}
       </section>
 
       <section className="panel span-two">
-        <PanelHeader icon={Database} title="审计日志" subtitle="医疗软件交付留痕" />
+        <PanelHeader icon={ClipboardCheck} title="最近交付记录" subtitle="展示与 AI 定制相关的需求、变更和发布结果" />
         <div className="audit-table">
-          {state.auditLog.map((log) => (
+          {(recentDeliveryLogs.length ? recentDeliveryLogs : state.auditLog.slice(0, 3)).map((log) => (
             <div className="audit-row" key={log.id}>
               <span>{new Date(log.at).toLocaleString('zh-CN')}</span>
-              <strong>{log.action}</strong>
-              <small>{log.actor}</small>
-              <p>{log.detail}</p>
+              <strong>{deliveryActionLabel(log.action)}</strong>
+              <small>{deliveryActorLabel(log.actor)}</small>
+              <p>{deliveryLogDetail(log.detail)}</p>
             </div>
           ))}
         </div>
@@ -718,15 +718,17 @@ function JobDetail({ job }) {
           <strong>{job.plan?.title || job.id}</strong>
           <span>{job.requirement}</span>
         </div>
-        <StatusPill tone={job.status === 'completed' ? 'green' : job.status === 'failed' ? 'red' : 'amber'} icon={Activity} text={job.status} />
+        <StatusPill tone={job.status === 'completed' ? 'green' : job.status === 'failed' ? 'red' : 'amber'} icon={Activity} text={jobStatusLabel(job.status)} />
       </div>
 
-      <div className="stage-grid">
+      <div className="stage-timeline">
         {job.stages.map((stage) => (
           <div className={cx('stage-item', stage.status)} key={stage.id}>
             {stage.status === 'done' ? <Check size={16} /> : stage.status === 'running' ? <Loader2 className="spin" size={16} /> : <TestTube2 size={16} />}
-            <strong>{stage.name}</strong>
-            <span>{stage.detail || stage.status}</span>
+            <div>
+              <strong>{stageName(stage)}</strong>
+              <span>{stageDetail(stage)}</span>
+            </div>
           </div>
         ))}
       </div>
@@ -737,7 +739,7 @@ function JobDetail({ job }) {
           <p>{job.plan.summary}</p>
           <div className="operation-list">
             {job.plan.operations.map((operation, index) => (
-              <code key={`${operation.type}-${index}`}>{operation.type} · {operation.step?.name || operation.field?.label || operation.rule?.name || operation.title}</code>
+              <span className="operation-chip" key={`${operation.type}-${index}`}>{operationLabel(operation)}</span>
             ))}
           </div>
         </div>
@@ -756,14 +758,13 @@ function JobDetail({ job }) {
         </div>
       )}
 
-      {job.sourceControl && (
+      {job.deployment && (
         <div className="plan-block">
-          <h3>Gitea 留痕</h3>
-          <div className="source-control-block">
-            <Fact label="仓库" value={`${job.sourceControl.owner}/${job.sourceControl.repo}`} />
-            <Fact label="分支" value={job.sourceControl.branch} />
-            <Fact label="Commit" value={job.sourceControl.commitSha?.slice(0, 10) || '已记录'} />
-            <a href={job.sourceControl.fileUrl} target="_blank" rel="noreferrer">查看交付清单</a>
+          <h3>交付记录</h3>
+          <div className="delivery-record-block">
+            <Fact label="版本" value={job.deployment.version} />
+            <Fact label="状态" value={deliveryStatusLabel(job.deployment.status)} />
+            <Fact label="时间" value={new Date(job.deployment.createdAt).toLocaleString('zh-CN')} />
           </div>
         </div>
       )}
@@ -771,14 +772,90 @@ function JobDetail({ job }) {
   );
 }
 
-function IntegrationBadge({ icon: Icon, label, value }) {
-  return (
-    <div className="integration-badge">
-      <Icon size={16} />
-      <span>{label}</span>
-      <strong>{value}</strong>
-    </div>
-  );
+function stageName(stage) {
+  return {
+    'source-control': '保存交付记录'
+  }[stage.id] || stage.name || stage.id;
+}
+
+function stageDetail(stage) {
+  if (!stage.detail) {
+    return stageStatusLabel(stage.status);
+  }
+
+  if (stage.id === 'source-control') {
+    return '变更计划、测试结果和发布记录已保存。';
+  }
+
+  return deliveryLogDetail(stage.detail);
+}
+
+function stageStatusLabel(status) {
+  return {
+    waiting: '等待执行',
+    running: '正在执行',
+    done: '已完成',
+    failed: '执行失败'
+  }[status] || status;
+}
+
+function jobStatusLabel(status) {
+  return {
+    running: '执行中',
+    completed: '已完成',
+    failed: '失败'
+  }[status] || status;
+}
+
+function deliveryStatusLabel(status) {
+  return {
+    active: '已发布',
+    'pending-approval': '待审核',
+    failed: '发布失败'
+  }[status] || status;
+}
+
+function deliveryActionLabel(action) {
+  return {
+    'complete-ai-job': 'AI定制完成',
+    'apply-change-plan': '变更计划已应用',
+    'approve-ai-deployment': '预览版本已审批',
+    'step-record': '节点表单已保存',
+    'advance-patient': '患者流程已推进'
+  }[action] || action;
+}
+
+function deliveryActorLabel(actor) {
+  return {
+    'ai-delivery-agent': 'AI定制助手',
+    'desktop-user': '操作员'
+  }[actor] || actor;
+}
+
+function deliveryLogDetail(detail = '') {
+  const submittedDeliveryPattern = new RegExp('已' + '提交\\s+[^@\\s]+@[^@\\s]+', 'g');
+  return detail
+    .replace(/，[^，。]*提交\s*[a-zA-Z0-9]{6,}/g, '')
+    .replace(submittedDeliveryPattern, '变更计划、测试结果和发布记录已保存。')
+    .replace(/未配置[^，。]*，已保留本地审计记录。/g, '变更计划、测试结果和发布记录已保存。')
+    .replace(/[A-Za-z]+ 留痕/g, '交付记录');
+}
+
+function operationLabel(operation) {
+  const target = operation.step?.name || operation.field?.label || operation.rule?.name || operation.title || '当前配置';
+  const action = {
+    'add-step': '新增流程节点',
+    'update-step': '调整流程节点',
+    'remove-step': '删除流程节点',
+    'add-field': '新增表单字段',
+    'update-field': '调整表单字段',
+    'remove-field': '删除表单字段',
+    'add-rule': '新增业务规则',
+    'update-rule': '调整业务规则',
+    'remove-rule': '删除业务规则'
+  }[operation.type] || '应用变更';
+
+  return `${action}：${target}`;
 }
 
 function WorkflowRail({ workflow, compact = false }) {
@@ -786,10 +863,11 @@ function WorkflowRail({ workflow, compact = false }) {
     <div className={cx('workflow-rail', compact && 'compact')}>
       {workflow.steps.map((step, index) => (
         <div className={cx('workflow-step', step.state || 'plain')} key={step.id}>
-          <div className="step-index">{index + 1}</div>
+          <div className="step-index">第{index + 1}步</div>
           <div>
             <strong>{step.name}</strong>
-            <span>{roleName(step.role)} · {step.slaHours}h</span>
+            <span>处理人：{roleName(step.role)}</span>
+            <span>目标：{slaLabel(step.slaHours)}内完成</span>
           </div>
         </div>
       ))}
@@ -806,6 +884,15 @@ function roleName(role) {
     director: '主任',
     nurse: '护士'
   }[role] || role;
+}
+
+function slaLabel(hours) {
+  if (hours < 24) {
+    return `${hours}小时`;
+  }
+
+  const days = Math.round(hours / 24);
+  return `${days}天`;
 }
 
 function PanelHeader({ icon: Icon, title, subtitle, action }) {

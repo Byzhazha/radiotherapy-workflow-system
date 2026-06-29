@@ -26,7 +26,7 @@ export function createDefaultStore() {
           id: 'registration',
           name: '患者登记',
           role: 'registrar',
-          slaHours: 4,
+          slaHours: 1,
           room: '门诊登记',
           formFields: [
             { key: 'diagnosis', label: '诊断', type: 'text', required: true },
@@ -38,7 +38,7 @@ export function createDefaultStore() {
           id: 'consultation',
           name: '放疗会诊',
           role: 'doctor',
-          slaHours: 12,
+          slaHours: 4,
           room: '医生工作站',
           formFields: [
             { key: 'intent', label: '治疗目的', type: 'select', required: true, options: ['根治', '辅助', '姑息'] },
@@ -110,7 +110,7 @@ export function createDefaultStore() {
           id: 'treatment-schedule',
           name: '治疗排程',
           role: 'nurse',
-          slaHours: 8,
+          slaHours: 4,
           room: '排程中心',
           formFields: [
             { key: 'machineId', label: '治疗设备', type: 'select', required: true, options: ['LA-1', 'LA-2', 'TOMO-1'] },

@@ -96,57 +96,9 @@ async function createMainWindow(apiBaseUrl) {
 }
 
 function installApplicationMenu() {
-  const template = [
-    {
-      label: '文件',
-      submenu: [
-        {
-          label: '刷新',
-          accelerator: 'Ctrl+R',
-          click: () => mainWindow?.reload()
-        },
-        { type: 'separator' },
-        {
-          label: '退出',
-          accelerator: 'Alt+F4',
-          click: () => app.quit()
-        }
-      ]
-    },
-    {
-      label: '编辑',
-      submenu: [
-        { label: '撤销', role: 'undo' },
-        { label: '重做', role: 'redo' },
-        { type: 'separator' },
-        { label: '剪切', role: 'cut' },
-        { label: '复制', role: 'copy' },
-        { label: '粘贴', role: 'paste' },
-        { label: '全选', role: 'selectAll' }
-      ]
-    },
-    {
-      label: '视图',
-      submenu: [
-        { label: '实际大小', role: 'resetZoom' },
-        { label: '放大', role: 'zoomIn' },
-        { label: '缩小', role: 'zoomOut' },
-        { type: 'separator' },
-        { label: '全屏', role: 'togglefullscreen' }
-      ]
-    },
-    {
-      label: '窗口',
-      submenu: [
-        { label: '最小化', role: 'minimize' },
-        { label: '关闭窗口', role: 'close' }
-      ]
-    }
-  ];
-
-  // Electron defaults to English menus on Windows; install a product-specific
-  // Chinese menu so the desktop shell matches the clinical system UI.
-  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+  // This clinical workstation uses in-app navigation; the desktop menu would
+  // only duplicate shell commands and make the product feel unfinished.
+  Menu.setApplicationMenu(null);
 }
 
 process.on('uncaughtException', (error) => {

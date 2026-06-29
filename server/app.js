@@ -27,7 +27,7 @@ function createJob(requirement) {
       { id: 'apply', name: '修改系统', status: 'waiting' },
       { id: 'test', name: '自动回归测试', status: 'waiting' },
       { id: 'deploy', name: '发布预览版本', status: 'waiting' },
-      { id: 'source-control', name: '提交Gitea留痕', status: 'waiting' }
+      { id: 'source-control', name: '保存交付记录', status: 'waiting' }
     ],
     plan: null,
     testResult: null,
@@ -99,9 +99,9 @@ async function executeAiJob({ store, job, aiClient, giteaClient, storage }) {
         content: `${JSON.stringify(manifest, null, 2)}\n`,
         message: `AI定制变更：${plan.title}`
       });
-      markStage(job, 'source-control', 'done', `已提交 ${job.sourceControl.owner}/${job.sourceControl.repo}@${job.sourceControl.branch}`);
+      markStage(job, 'source-control', 'done', '变更计划、测试结果和发布记录已保存。');
     } else {
-      markStage(job, 'source-control', 'done', '未配置Gitea，已保留本地审计记录。');
+      markStage(job, 'source-control', 'done', '变更计划、测试结果和发布记录已保存。');
     }
 
     store.auditLog.push({
@@ -109,7 +109,7 @@ async function executeAiJob({ store, job, aiClient, giteaClient, storage }) {
       at: new Date().toISOString(),
       actor: 'ai-delivery-agent',
       action: 'complete-ai-job',
-      detail: `${job.id} 完成：${plan.title}${job.sourceControl?.commitSha ? `，Gitea提交 ${job.sourceControl.commitSha.slice(0, 8)}` : ''}`
+      detail: `${job.id} 完成：${plan.title}`
     });
   } catch (error) {
     job.status = 'failed';
@@ -172,6 +172,7 @@ export async function createApiServer({ port = 8750, host = '127.0.0.1', dataDir
       deployments: store.deployments,
       auditLog: store.auditLog.slice(-30).reverse(),
       integrations: {
+        aiModel: process.env.AI_MODEL || null,
         gitea: giteaClient.publicConfig(),
         jenkins: {
           enabled: Boolean(process.env.JENKINS_URL),

@@ -48,7 +48,7 @@ AI 服务配置在 `.env`：
 ```env
 AI_BASE_URL=https://zz1cc.cc.cd/v1
 AI_API_KEY=your-server-side-key
-AI_MODEL=gpt-5.4-mini
+AI_MODEL=gpt-5.5
 RT_API_PORT=8750
 RT_API_HOST=127.0.0.1
 GITEA_BASE_URL=https://gitea.jaycode.online
@@ -93,6 +93,6 @@ Windows 桌面端输出到 `release/放疗流程管理系统-win-x64/`。打开 
 
 ## 面试讲法
 
-这个项目回答的是“开发人员如何基于现有放疗流程管理软件，利用 AI 完成客户定制化需求”。主系统先解决放疗业务闭环，AI 定制助手再读取现有流程、字段、规则和发布状态，把医院需求转成受约束的变更计划，自动应用、测试、预览发布，并保留医疗软件需要的审计链路。
+这个项目回答的是“开发人员如何基于现有放疗流程管理软件，利用 AI 完成客户定制化需求”。主系统先解决放疗业务闭环，AI 定制助手通过后端 OpenAI 兼容接口调用大模型，读取现有流程、字段、规则和发布状态，把医院需求转成受约束的变更计划，自动应用、测试、预览发布，并保留医疗软件需要的审计链路。
 
 Gitea 用来证明每次 AI 修改都有版本记录、diff、交付清单和可回滚依据。Jenkins 不是第一版主线，因为题目重点是压缩传统 CI/CD；需要企业化接入时，可以让 Jenkins 消费 Gitea push/webhook 继续执行更重的流水线。

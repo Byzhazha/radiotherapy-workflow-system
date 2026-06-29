@@ -99,9 +99,7 @@ button {
   font-size: 15px;
 }
 
-.brand-block span,
-.system-card span,
-.system-card strong {
+.brand-block span {
   display: block;
 }
 
@@ -133,25 +131,6 @@ nav {
 .nav-button.active {
   background: rgba(255, 255, 255, 0.08);
   border-left-color: #f0c66d;
-}
-
-.system-card {
-  margin-top: auto;
-  padding: 14px;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.system-label {
-  color: #b7c5c2;
-  font-size: 12px;
-}
-
-.system-card strong {
-  margin: 6px 0 12px;
-  color: #fff7df;
-  font-size: 13px;
-  word-break: break-all;
 }
 
 .workspace {
@@ -327,16 +306,16 @@ h1 {
 
 .workflow-rail {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 10px;
 }
 
 .workflow-rail.compact {
-  grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
 }
 
 .workflow-step {
-  min-height: 78px;
+  min-height: 112px;
   padding: 12px;
   border: 1px solid #d9d0bf;
   background: #fffaf0;
@@ -355,8 +334,9 @@ h1 {
 }
 
 .step-index {
-  width: 24px;
+  width: fit-content;
   height: 24px;
+  padding: 0 8px;
   display: grid;
   place-items: center;
   margin-bottom: 9px;
@@ -771,7 +751,7 @@ code {
 
 .ai-layout {
   display: grid;
-  grid-template-columns: minmax(380px, 0.85fr) minmax(0, 1.15fr);
+  grid-template-columns: minmax(420px, 0.8fr) minmax(0, 1.2fr);
   gap: 18px;
 }
 
@@ -785,40 +765,32 @@ code {
   margin-bottom: 12px;
 }
 
-.integration-strip {
+.assistant-summary {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 8px;
   margin-bottom: 12px;
 }
 
-.integration-badge {
-  display: grid;
-  grid-template-columns: auto 62px 1fr;
-  gap: 8px;
-  align-items: center;
-  min-height: 42px;
-  padding: 9px 10px;
+.assistant-summary > div {
+  padding: 10px;
   border: 1px solid var(--line);
   background: #fffaf0;
 }
 
-.integration-badge svg {
-  color: var(--blue);
+.assistant-summary strong,
+.assistant-summary span {
+  display: block;
 }
 
-.integration-badge span {
+.assistant-summary strong {
+  font-size: 13px;
+}
+
+.assistant-summary span {
+  margin-top: 4px;
   color: var(--muted);
   font-size: 12px;
-  font-weight: 800;
-}
-
-.integration-badge strong {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 12px;
+  line-height: 1.5;
 }
 
 .primary-button,
@@ -906,20 +878,20 @@ code {
   line-height: 1.5;
 }
 
-.stage-grid {
+.stage-timeline {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 8px;
 }
 
 .stage-item {
-  min-height: 108px;
+  min-height: 70px;
   padding: 11px;
   border: 1px solid var(--line);
   background: #fffaf0;
   display: grid;
-  align-content: start;
-  gap: 8px;
+  grid-template-columns: auto 1fr;
+  gap: 10px;
+  align-items: start;
 }
 
 .stage-item.done {
@@ -941,12 +913,15 @@ code {
 }
 
 .stage-item strong {
+  display: block;
   font-size: 13px;
 }
 
 .stage-item span {
+  display: block;
+  margin-top: 4px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   line-height: 1.4;
 }
 
@@ -974,23 +949,24 @@ code {
   margin-top: 8px;
 }
 
-.source-control-block {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr)) auto;
-  gap: 8px;
-  align-items: stretch;
-}
-
-.source-control-block a {
+.operation-chip {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 0 12px;
-  color: white;
-  background: var(--blue);
-  text-decoration: none;
+  max-width: 100%;
+  padding: 6px 9px;
+  border: 1px solid #dfd5c4;
+  background: #f5eddd;
+  color: #39444b;
+  font-size: 12px;
   font-weight: 800;
-  font-size: 13px;
+  line-height: 1.35;
+}
+
+.delivery-record-block {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  align-items: stretch;
 }
 
 .test-row {
@@ -1049,11 +1025,7 @@ code {
     grid-column: auto;
   }
 
-  .stage-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .source-control-block {
+  .delivery-record-block {
     grid-template-columns: 1fr;
   }
 }
