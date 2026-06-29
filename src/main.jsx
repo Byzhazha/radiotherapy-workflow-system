@@ -633,6 +633,8 @@ function FollowUpView({ state }) {
 function CustomizationAssistant({ state, onRefresh }) {
   const [requirement, setRequirement] = useState(requirementSamples[0]);
   const [running, setRunning] = useState(false);
+  const [approving, setApproving] = useState(false);
+  const [rollingBackId, setRollingBackId] = useState('');
   const [message, setMessage] = useState('');
 
   async function submitRequirement() {
@@ -644,7 +646,7 @@ function CustomizationAssistant({ state, onRefresh }) {
         body: JSON.stringify({ requirement })
       });
       await onRefresh();
-      setMessage('已完成需求解析、系统变更、自动测试和预览发布。');
+      setMessage('已生成沙箱预览，完成业务安全检查后可审批激活。');
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -652,25 +654,71 @@ function CustomizationAssistant({ state, onRefresh }) {
     }
   }
 
+  async function approveLatestJob() {
+    if (!latestJob) return;
+
+    setApproving(true);
+    setMessage('');
+    try {
+      await api(`/api/ai/jobs/${latestJob.id}/approve`, {
+        method: 'POST',
+        body: JSON.stringify({
+          operator: 'delivery-manager',
+          comment: '已核对预览差异、测试结果和审批清单。'
+        })
+      });
+      await onRefresh();
+      setMessage('预览配置已审批并激活。');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setApproving(false);
+    }
+  }
+
+  async function rollbackDeployment(deploymentId) {
+    setRollingBackId(deploymentId);
+    setMessage('');
+    try {
+      await api(`/api/deployments/${deploymentId}/rollback`, {
+        method: 'POST',
+        body: JSON.stringify({
+          operator: 'delivery-manager',
+          reason: '恢复已验证版本。'
+        })
+      });
+      await onRefresh();
+      setMessage('已恢复到选定配置版本。');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setRollingBackId('');
+    }
+  }
+
   const latestJob = state.aiJobs[0];
-  const recentDeliveryLogs = state.auditLog.filter((log) => ['complete-ai-job', 'apply-change-plan'].includes(log.action)).slice(0, 5);
+  const recentDeliveryLogs = state.auditLog
+    .filter((log) => ['complete-ai-job', 'apply-change-plan', 'approve-ai-deployment', 'rollback-deployment'].includes(log.action))
+    .slice(0, 5);
+  const canApprove = latestJob?.deployment?.status === 'pending-approval';
+  const rollbackTargets = state.deployments.filter((deployment) => deployment.status === 'active' || deployment.status === 'superseded').slice(0, 5);
 
   return (
     <div className="ai-layout">
       <section className="panel ai-console">
-        <PanelHeader icon={Bot} title="下达定制需求" subtitle="面向开发/实施人员，直接输入医院提出的流程改动" />
+        <PanelHeader icon={Bot} title="下达定制需求" subtitle="输入医院提出的流程、规则、报表或权限改动" />
         <div className="assistant-summary">
           <div>
-            <strong>直接下任务</strong>
-            <span>输入一句需求，点击生成，系统会修改当前流程/表单/规则。</span>
+            <strong>生成预览</strong>
+            <span>AI 会把需求转换为流程、表单、规则、页面、报表和权限配置变更。</span>
           </div>
           <div>
-            <strong>执行过程</strong>
-            <span>提交后会展示理解需求、生成计划、修改系统、自动测试和发布预览。</span>
+            <strong>安全检查</strong>
+            <span>系统先在沙箱里验证患者落点、核心路径、权限引用、报表和布局契约。</span>
           </div>
           <div>
-            <strong>交付留痕</strong>
-            <span>成功后保存变更计划、测试结果和发布记录，方便复盘与回滚。</span>
+            <strong>审批激活</strong>
+            <span>预览通过后审批激活，已验证版本可以随时恢复。</span>
           </div>
         </div>
         <textarea value={requirement} onChange={(event) => setRequirement(event.target.value)} />
@@ -683,14 +731,62 @@ function CustomizationAssistant({ state, onRefresh }) {
         </div>
         <button className="primary-button wide" onClick={submitRequirement} disabled={running}>
           {running ? <Loader2 className="spin" size={17} /> : <Code2 size={17} />}
-          {running ? '正在生成变更...' : '生成并应用定制变更'}
+          {running ? '正在生成预览...' : '生成沙箱预览'}
         </button>
+        {canApprove && (
+          <button className="primary-button wide approve" onClick={approveLatestJob} disabled={approving}>
+            {approving ? <Loader2 className="spin" size={17} /> : <ShieldCheck size={17} />}
+            {approving ? '正在激活...' : '审批并激活预览'}
+          </button>
+        )}
         {message && <div className="message-line">{message}</div>}
       </section>
 
       <section className="panel">
-        <PanelHeader icon={Activity} title="执行结果" subtitle="AI 会依次完成需求理解、系统变更、自动测试和发布预览" />
+        <PanelHeader icon={Activity} title="执行结果" subtitle="展示沙箱预览、业务安全检查和审批状态" />
         {latestJob ? <JobDetail job={latestJob} /> : <div className="empty-state">暂无AI变更任务。</div>}
+      </section>
+
+      <section className="panel span-two">
+        <PanelHeader icon={ClipboardCheck} title="版本与回滚" subtitle="查看已生成配置版本，恢复经过验证的版本" />
+        <div className="delivery-board">
+          <div>
+            <h3>配置版本</h3>
+            <div className="version-list">
+              {state.configVersions.slice(0, 6).map((version) => (
+                <div className="version-row" key={version.id}>
+                  <div>
+                    <strong>{version.version}</strong>
+                    <span>{version.title}</span>
+                  </div>
+                  <StatusPill tone={version.status === 'active' ? 'green' : version.status === 'pending-approval' ? 'amber' : 'red'} icon={Activity} text={deliveryStatusLabel(version.status)} />
+                </div>
+              ))}
+            </div>
+          </div>
+          <div>
+            <h3>可恢复版本</h3>
+            <div className="version-list">
+              {rollbackTargets.map((deployment) => (
+                <div className="version-row" key={deployment.id}>
+                  <div>
+                    <strong>{deployment.version}</strong>
+                    <span>{deployment.title}</span>
+                  </div>
+                  <button className="ghost-button" onClick={() => rollbackDeployment(deployment.id)} disabled={Boolean(rollingBackId)}>
+                    {rollingBackId === deployment.id ? <Loader2 className="spin" size={15} /> : <ShieldCheck size={15} />}
+                    恢复
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section className="panel span-two">
+        <PanelHeader icon={LayoutDashboard} title="配置化交付视图" subtitle="展示当前版本定义的页面、报表和角色权限" />
+        <ConfigDeliveryView state={state} />
       </section>
 
       <section className="panel span-two">
@@ -706,6 +802,60 @@ function CustomizationAssistant({ state, onRefresh }) {
           ))}
         </div>
       </section>
+    </div>
+  );
+}
+
+function ConfigDeliveryView({ state }) {
+  const deliveryLayout = state.uiLayouts.find((layout) => layout.pageId === 'delivery-workbench') || state.uiLayouts[0];
+  const permissionRows = Object.entries(state.permissionMatrix || {});
+
+  return (
+    <div className="config-delivery-grid">
+      <div className="layout-preview">
+        <div className="layout-preview-head">
+          <strong>{deliveryLayout?.title || '交付工作台'}</strong>
+          <span>{deliveryLayout?.sections?.length || 0} 个配置区块</span>
+        </div>
+        <div className="layout-section-grid">
+          {(deliveryLayout?.sections || []).map((section) => (
+            <div className={cx('layout-section', `cols-${section.columns || 1}`)} key={section.id}>
+              <span>{sectionDisplayLabel(section.display)}</span>
+              <strong>{section.title}</strong>
+              <small>{sectionSourceLabel(section.source)}</small>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="config-side-grid">
+        <div>
+          <h3>报表模板</h3>
+          <div className="template-list">
+            {state.reportTemplates.map((template) => (
+              <div className="template-item" key={template.id}>
+                <div>
+                  <strong>{template.name}</strong>
+                  <span>{template.audience} · {datasetLabel(template.dataset)}</span>
+                </div>
+                <small>{scheduleLabel(template.schedule)}</small>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div>
+          <h3>角色权限</h3>
+          <div className="permission-list">
+            {permissionRows.map(([roleId, permission]) => (
+              <div className="permission-item" key={roleId}>
+                <strong>{roleName(roleId)}</strong>
+                <span>{permissionSummary(permission)}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -747,7 +897,7 @@ function JobDetail({ job }) {
 
       {job.testResult && (
         <div className="plan-block">
-          <h3>自动测试</h3>
+          <h3>业务安全检查</h3>
           {job.testResult.checks.map((check) => (
             <div className="test-row" key={check.name}>
               {check.passed ? <Check size={15} /> : <AlertTriangle size={15} />}
@@ -755,6 +905,36 @@ function JobDetail({ job }) {
               <span>{check.detail}</span>
             </div>
           ))}
+        </div>
+      )}
+
+      {job.sandbox?.diff?.length > 0 && (
+        <div className="plan-block">
+          <h3>沙箱差异</h3>
+          <div className="diff-grid">
+            {job.sandbox.diff.map((change, index) => (
+              <div className="diff-item" key={`${change.area}-${change.id}-${index}`}>
+                <span>{configAreaLabel(change.area)}</span>
+                <strong>{change.title}</strong>
+                <small>{changeActionLabel(change.action)}</small>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {job.deployment?.approval && (
+        <div className="plan-block">
+          <h3>审批详情</h3>
+          <div className="approval-list">
+            {job.deployment.approval.checklist?.map((item) => (
+              <div className="approval-item" key={item}>
+                <ClipboardCheck size={15} />
+                <span>{item}</span>
+              </div>
+            ))}
+          </div>
+          <p>{approvalStatusText(job.deployment.approval)}</p>
         </div>
       )}
 
@@ -774,6 +954,9 @@ function JobDetail({ job }) {
 
 function stageName(stage) {
   return {
+    sandbox: '生成沙箱预览',
+    test: '业务安全检查',
+    deploy: '生成待审批版本',
     'source-control': '保存交付记录'
   }[stage.id] || stage.name || stage.id;
 }
@@ -784,7 +967,7 @@ function stageDetail(stage) {
   }
 
   if (stage.id === 'source-control') {
-    return '变更计划、测试结果和发布记录已保存。';
+    return '变更计划、配置快照、差异和测试结果已保存。';
   }
 
   return deliveryLogDetail(stage.detail);
@@ -811,6 +994,7 @@ function deliveryStatusLabel(status) {
   return {
     active: '已发布',
     'pending-approval': '待审核',
+    superseded: '已归档',
     failed: '发布失败'
   }[status] || status;
 }
@@ -820,6 +1004,7 @@ function deliveryActionLabel(action) {
     'complete-ai-job': 'AI定制完成',
     'apply-change-plan': '变更计划已应用',
     'approve-ai-deployment': '预览版本已审批',
+    'rollback-deployment': '已恢复版本',
     'step-record': '节点表单已保存',
     'advance-patient': '患者流程已推进'
   }[action] || action;
@@ -842,20 +1027,119 @@ function deliveryLogDetail(detail = '') {
 }
 
 function operationLabel(operation) {
-  const target = operation.step?.name || operation.field?.label || operation.rule?.name || operation.title || '当前配置';
+  const target = operation.step?.name
+    || operation.field?.label
+    || operation.rule?.name
+    || operation.layout?.title
+    || operation.template?.name
+    || operation.stepId
+    || operation.ruleId
+    || operation.roleId
+    || operation.title
+    || '当前配置';
   const action = {
-    'add-step': '新增流程节点',
-    'update-step': '调整流程节点',
-    'remove-step': '删除流程节点',
-    'add-field': '新增表单字段',
-    'update-field': '调整表单字段',
-    'remove-field': '删除表单字段',
-    'add-rule': '新增业务规则',
-    'update-rule': '调整业务规则',
-    'remove-rule': '删除业务规则'
+    addWorkflowStep: '新增流程节点',
+    updateWorkflowStep: '调整流程节点',
+    removeWorkflowStep: '删除流程节点',
+    addFormField: '新增表单字段',
+    updateFormField: '调整表单字段',
+    removeFormField: '删除表单字段',
+    addRule: '新增业务规则',
+    updateRule: '调整业务规则',
+    removeRule: '删除业务规则',
+    updateUiPanel: '更新界面面板',
+    upsertUiLayout: '调整页面布局',
+    upsertReportTemplate: '生成报表模板',
+    updatePermission: '调整角色权限'
   }[operation.type] || '应用变更';
 
   return `${action}：${target}`;
+}
+
+function configAreaLabel(area) {
+  return {
+    workflow: '流程',
+    rules: '规则',
+    uiPanels: '面板',
+    uiLayouts: '页面',
+    reportTemplates: '报表',
+    permissionMatrix: '权限'
+  }[area] || area;
+}
+
+function changeActionLabel(action) {
+  return {
+    added: '新增',
+    updated: '更新',
+    removed: '删除'
+  }[action] || action;
+}
+
+function approvalStatusText(approval) {
+  if (approval.status === 'approved') {
+    return `审批通过：${approval.comment || '已激活预览配置。'}`;
+  }
+
+  return `等待${approval.requiredBy || '负责人'}审批。`;
+}
+
+function sectionSourceLabel(source) {
+  return {
+    workflow: '流程数据',
+    patients: '患者队列',
+    appointments: '排程数据',
+    qaReports: '质控记录',
+    followUps: '随访计划',
+    rules: '规则库',
+    deployments: '版本记录',
+    aiJobs: '定制任务',
+    reports: '报表模板'
+  }[source] || source;
+}
+
+function sectionDisplayLabel(display) {
+  return {
+    timeline: '时间线',
+    queue: '队列',
+    list: '列表',
+    cards: '卡片',
+    chart: '图表',
+    diff: '差异',
+    approval: '审批',
+    table: '表格'
+  }[display] || display;
+}
+
+function datasetLabel(dataset) {
+  return {
+    patients: '患者',
+    appointments: '排程',
+    qaReports: '质控',
+    followUps: '随访',
+    rules: '规则',
+    deployments: '版本'
+  }[dataset] || dataset;
+}
+
+function scheduleLabel(schedule) {
+  return {
+    manual: '手动生成',
+    daily: '每日生成',
+    weekly: '每周生成',
+    monthly: '每月生成'
+  }[schedule] || schedule;
+}
+
+function permissionSummary(permission) {
+  const enabled = [
+    permission.canEditPatients && '患者',
+    permission.canManageWorkflow && '流程',
+    permission.canApproveDeployments && '审批',
+    permission.canRollbackDeployments && '回滚',
+    permission.canViewReports && '报表'
+  ].filter(Boolean);
+
+  return `${enabled.length ? enabled.join('、') : '基础操作'} · ${permission.workflowStepIds?.length || 0} 个流程节点`;
 }
 
 function WorkflowRail({ workflow, compact = false }) {

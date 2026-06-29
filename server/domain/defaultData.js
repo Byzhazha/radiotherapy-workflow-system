@@ -1,6 +1,9 @@
 export function createDefaultStore() {
   const now = new Date().toISOString();
+  return buildDefaultStore(now);
+}
 
+export function buildDefaultStore(now = new Date().toISOString()) {
   return {
     schemaVersion: 1,
     product: {
@@ -161,6 +164,98 @@ export function createDefaultStore() {
         enabled: true
       }
     ],
+    uiLayouts: [
+      {
+        pageId: 'clinical-overview',
+        title: '临床运行总览',
+        sections: [
+          { id: 'workflow', title: '当前放疗流程', source: 'workflow', display: 'timeline', columns: 2, visible: true },
+          { id: 'patient-queue', title: '患者队列', source: 'patients', display: 'queue', columns: 1, visible: true },
+          { id: 'quality', title: '最近质控', source: 'qaReports', display: 'list', columns: 1, visible: true }
+        ]
+      },
+      {
+        pageId: 'delivery-workbench',
+        title: '定制交付工作台',
+        sections: [
+          { id: 'preview', title: '沙箱预览', source: 'deployments', display: 'diff', columns: 2, visible: true },
+          { id: 'approval', title: '审批详情', source: 'aiJobs', display: 'approval', columns: 1, visible: true }
+        ]
+      }
+    ],
+    uiPanels: [
+      { panelId: 'ai-delivery-console', title: '下达定制需求', description: '输入医院流程、表单、规则、报表或权限定制需求。' }
+    ],
+    reportTemplates: [
+      {
+        id: 'treatment-prep-summary',
+        name: '治疗准备汇总',
+        audience: '放疗医生',
+        dataset: 'patients',
+        fields: ['name', 'diagnosis', 'currentStepId', 'prescription.totalDoseGy', 'dosePlan.gammaPassRate'],
+        schedule: 'manual',
+        enabled: true
+      },
+      {
+        id: 'qa-risk-review',
+        name: '质控风险复核',
+        audience: '物理师',
+        dataset: 'qaReports',
+        fields: ['patientId', 'type', 'score', 'result', 'createdAt'],
+        schedule: 'daily',
+        enabled: true
+      }
+    ],
+    permissionMatrix: {
+      registrar: {
+        canEditPatients: true,
+        canManageWorkflow: false,
+        canApproveDeployments: false,
+        canRollbackDeployments: false,
+        canViewReports: true,
+        workflowStepIds: ['registration']
+      },
+      doctor: {
+        canEditPatients: true,
+        canManageWorkflow: false,
+        canApproveDeployments: false,
+        canRollbackDeployments: false,
+        canViewReports: true,
+        workflowStepIds: ['consultation', 'contouring', 'follow-up']
+      },
+      physicist: {
+        canEditPatients: true,
+        canManageWorkflow: false,
+        canApproveDeployments: false,
+        canRollbackDeployments: false,
+        canViewReports: true,
+        workflowStepIds: ['plan-design', 'physics-review']
+      },
+      technician: {
+        canEditPatients: true,
+        canManageWorkflow: false,
+        canApproveDeployments: false,
+        canRollbackDeployments: false,
+        canViewReports: false,
+        workflowStepIds: ['ct-simulation', 'first-treatment']
+      },
+      director: {
+        canEditPatients: true,
+        canManageWorkflow: true,
+        canApproveDeployments: true,
+        canRollbackDeployments: true,
+        canViewReports: true,
+        workflowStepIds: ['director-review']
+      },
+      nurse: {
+        canEditPatients: true,
+        canManageWorkflow: false,
+        canApproveDeployments: false,
+        canRollbackDeployments: false,
+        canViewReports: true,
+        workflowStepIds: ['treatment-schedule']
+      }
+    },
     equipment: [
       { id: 'LA-1', name: '直线加速器 LA-1', type: 'LINAC', status: 'available', room: 'A机房' },
       { id: 'LA-2', name: '直线加速器 LA-2', type: 'LINAC', status: 'busy', room: 'B机房' },
@@ -294,11 +389,67 @@ export function createDefaultStore() {
         title: '基础放疗流程版本',
         status: 'active',
         createdAt: now,
+        activatedAt: now,
         summary: '初始流程、排程、剂量质控、随访管理和AI定制助手。'
+      }
+    ],
+    configVersions: [
+      {
+        id: 'CFG-BASE',
+        version: '0.1.0',
+        title: '基础放疗流程版本',
+        status: 'active',
+        createdAt: now,
+        activatedAt: now,
+        deploymentId: 'DEP-BASE'
       }
     ],
     auditLog: [
       { id: 'AUD-BASE', at: now, actor: 'system', action: 'seed-store', detail: '初始化放疗流程管理系统数据。' }
     ]
   };
+}
+
+export function ensureStoreShape(store) {
+  const defaults = buildDefaultStore(new Date().toISOString());
+
+  // Persisted installations created by earlier versions gain the new
+  // configurable surfaces without replacing their clinical data.
+  store.uiLayouts ||= defaults.uiLayouts;
+  store.uiPanels ||= defaults.uiPanels;
+  store.reportTemplates ||= defaults.reportTemplates;
+  store.permissionMatrix ||= defaults.permissionMatrix;
+  store.configVersions ||= defaults.configVersions;
+  store.deployments ||= defaults.deployments;
+  store.auditLog ||= [];
+  store.aiJobs ||= [];
+  store.rules ||= defaults.rules;
+  store.workflow ||= defaults.workflow;
+  store.roles ||= defaults.roles;
+  store.patients ||= defaults.patients;
+  store.appointments ||= defaults.appointments;
+  store.equipment ||= defaults.equipment;
+  store.qaReports ||= defaults.qaReports;
+  store.followUps ||= defaults.followUps;
+
+  for (const deployment of store.deployments) {
+    deployment.approvals ||= [];
+  }
+
+  const currentConfig = {
+    workflow: JSON.parse(JSON.stringify(store.workflow)),
+    rules: JSON.parse(JSON.stringify(store.rules)),
+    uiPanels: JSON.parse(JSON.stringify(store.uiPanels)),
+    uiLayouts: JSON.parse(JSON.stringify(store.uiLayouts)),
+    reportTemplates: JSON.parse(JSON.stringify(store.reportTemplates)),
+    permissionMatrix: JSON.parse(JSON.stringify(store.permissionMatrix))
+  };
+
+  for (const version of store.configVersions) {
+    version.after ||= JSON.parse(JSON.stringify(currentConfig));
+    version.diff ||= [];
+    version.approvals ||= [];
+  }
+
+  return store;
 }
