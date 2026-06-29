@@ -1,6 +1,6 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { createDefaultStore } from './domain/defaultData.js';
+import { createDefaultStore, ensureStoreShape } from './domain/defaultData.js';
 
 export class JsonStore {
   constructor({ dataDir }) {
@@ -23,18 +23,19 @@ export class JsonStore {
 
   async read() {
     const raw = await fs.readFile(this.storePath, 'utf8');
-    return JSON.parse(raw);
+    return ensureStoreShape(JSON.parse(raw));
   }
 
   async write(store) {
+    const shapedStore = ensureStoreShape(store);
     // Serialize writes so concurrent API requests cannot interleave JSON output.
     this.writeQueue = this.writeQueue.then(async () => {
       await fs.mkdir(this.dataDir, { recursive: true });
-      await fs.writeFile(this.storePath, `${JSON.stringify(store, null, 2)}\n`, 'utf8');
+      await fs.writeFile(this.storePath, `${JSON.stringify(shapedStore, null, 2)}\n`, 'utf8');
     });
 
     await this.writeQueue;
-    return store;
+    return shapedStore;
   }
 
   async update(mutator) {

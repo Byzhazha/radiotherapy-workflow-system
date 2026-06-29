@@ -136,9 +136,33 @@ export class GiteaClient {
       repoUrl
     };
   }
+
+  async upsertFiles({ files, message, branch = this.branch }) {
+    const results = [];
+
+    // Keep each artifact addressable in the repository so reviewers can inspect
+    // the manifest, config snapshot, and diff independently.
+    for (const file of files) {
+      results.push(await this.upsertFile({
+        filePath: file.filePath,
+        content: file.content,
+        message,
+        branch
+      }));
+    }
+
+    return {
+      provider: 'gitea',
+      branch,
+      files: results,
+      repoUrl: results[0]?.repoUrl || `${this.baseUrl}/${this.owner}/${this.repo}`,
+      commitSha: results.at(-1)?.commitSha || null,
+      commitUrl: results.at(-1)?.commitUrl || null
+    };
+  }
 }
 
-export function buildDeliveryManifest({ store, job, plan, testResult, deployment }) {
+export function buildDeliveryManifest({ store, job, plan, testResult, deployment, sandbox, configVersion }) {
   const workflowSnapshot = {
     id: store.workflow.id,
     name: store.workflow.name,
@@ -166,6 +190,8 @@ export function buildDeliveryManifest({ store, job, plan, testResult, deployment
     plan,
     testResult,
     deployment,
+    configVersion,
+    configDiff: sandbox?.diff || [],
     workflowSnapshot
   };
 }

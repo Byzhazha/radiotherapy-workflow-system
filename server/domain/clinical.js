@@ -68,7 +68,7 @@ export function buildDashboard(store) {
     },
     equipment: store.equipment,
     recentQa: store.qaReports.slice(-5).reverse(),
-    deployments: store.deployments.slice(-4).reverse()
+    deployments: store.deployments.slice(0, 4)
   };
 }
 

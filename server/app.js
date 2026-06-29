@@ -5,7 +5,7 @@ import path from 'node:path';
 import { JsonStore } from './storage.js';
 import { OpenAiCompatibleClient } from './aiClient.js';
 import { advancePatient, buildDashboard, evaluatePatientSafety, getPatientProgress, savePatientStepRecord } from './domain/clinical.js';
-import { applyChangePlan, runClinicalRegression } from './domain/changeEngine.js';
+import { applyConfigSlice, cloneConfigSlice, runClinicalRegression, simulateChangePlan } from './domain/changeEngine.js';
 import { requestAiChangePlan } from './domain/aiPlanner.js';
 import { buildDeliveryManifest, GiteaClient } from './integrations/giteaClient.js';
 
@@ -24,12 +24,13 @@ function createJob(requirement) {
     stages: [
       { id: 'understand', name: '理解需求', status: 'running' },
       { id: 'plan', name: '生成变更计划', status: 'waiting' },
-      { id: 'apply', name: '修改系统', status: 'waiting' },
-      { id: 'test', name: '自动回归测试', status: 'waiting' },
-      { id: 'deploy', name: '发布预览版本', status: 'waiting' },
+      { id: 'sandbox', name: '生成沙箱预览', status: 'waiting' },
+      { id: 'test', name: '业务安全检查', status: 'waiting' },
+      { id: 'deploy', name: '生成待审批版本', status: 'waiting' },
       { id: 'source-control', name: '保存交付记录', status: 'waiting' }
     ],
     plan: null,
+    sandbox: null,
     testResult: null,
     deployment: null,
     sourceControl: null,
@@ -47,9 +48,98 @@ function markStage(job, stageId, status, detail) {
   job.updatedAt = new Date().toISOString();
 }
 
+function compactConfig(config) {
+  // Job payloads keep a compact preview so the desktop UI can render diffs
+  // quickly while full before/after snapshots remain in configVersions/Gitea.
+  return {
+    workflow: {
+      activeVersion: config.workflow.activeVersion,
+      steps: config.workflow.steps.map((step) => ({
+        id: step.id,
+        name: step.name,
+        role: step.role,
+        slaHours: step.slaHours,
+        formFieldCount: step.formFields.length,
+        qualityCheckCount: step.qualityChecks.length
+      }))
+    },
+    rules: config.rules.map((rule) => ({
+      id: rule.id,
+      name: rule.name,
+      severity: rule.severity,
+      enabled: rule.enabled
+    })),
+    uiLayouts: config.uiLayouts.map((layout) => ({
+      pageId: layout.pageId,
+      title: layout.title,
+      sectionCount: layout.sections.length
+    })),
+    reportTemplates: config.reportTemplates.map((template) => ({
+      id: template.id,
+      name: template.name,
+      dataset: template.dataset,
+      enabled: template.enabled
+    })),
+    permissionRoles: Object.keys(config.permissionMatrix)
+  };
+}
+
+function createConfigVersion({ job, plan, sandbox, deployment }) {
+  const now = new Date().toISOString();
+  // The pending config version is the approval artifact: it contains the exact
+  // configuration that will become active if the reviewer approves the preview.
+  return {
+    id: `CFG-${Date.now()}`,
+    version: deployment.version,
+    title: plan.title,
+    status: 'pending-approval',
+    createdAt: now,
+    deploymentId: deployment.id,
+    jobId: job.id,
+    requirement: job.requirement,
+    riskLevel: plan.riskLevel,
+    summary: plan.summary,
+    before: sandbox.before,
+    after: sandbox.after,
+    diff: sandbox.diff,
+    approvals: []
+  };
+}
+
+async function writeDeliveryArtifacts({ giteaClient, store, job, plan, testResult, deployment, sandbox, configVersion }) {
+  if (!giteaClient.isConfigured()) {
+    return null;
+  }
+
+  const manifest = buildDeliveryManifest({ store, job, plan, testResult, deployment, sandbox, configVersion });
+  const basePath = `ai-deliveries/${job.id}`;
+
+  return giteaClient.upsertFiles({
+    message: `AI定制变更：${plan.title}`,
+    files: [
+      {
+        filePath: `${basePath}/manifest.json`,
+        content: `${JSON.stringify(manifest, null, 2)}\n`
+      },
+      {
+        filePath: `${basePath}/config-before.json`,
+        content: `${JSON.stringify(sandbox.before, null, 2)}\n`
+      },
+      {
+        filePath: `${basePath}/config-after.json`,
+        content: `${JSON.stringify(sandbox.after, null, 2)}\n`
+      },
+      {
+        filePath: `${basePath}/config-diff.json`,
+        content: `${JSON.stringify(sandbox.diff, null, 2)}\n`
+      }
+    ]
+  });
+}
+
 async function executeAiJob({ store, job, aiClient, giteaClient, storage }) {
   try {
-    markStage(job, 'understand', 'done', '已提取流程、字段、规则和UI影响点。');
+    markStage(job, 'understand', 'done', '已提取流程、字段、规则、页面、报表和权限影响点。');
     markStage(job, 'plan', 'running');
 
     const plan = await requestAiChangePlan({
@@ -60,14 +150,21 @@ async function executeAiJob({ store, job, aiClient, giteaClient, storage }) {
 
     job.plan = plan;
     markStage(job, 'plan', 'done', `生成 ${plan.operations.length} 个变更操作。`);
-    markStage(job, 'apply', 'running');
+    markStage(job, 'sandbox', 'running');
 
     await storage.backup(job.id);
-    const result = applyChangePlan(store, plan);
-    markStage(job, 'apply', 'done', result.applied.join(' '));
+    // AI changes are evaluated against a cloned store first; the active clinical
+    // configuration is left untouched until the approval endpoint applies it.
+    const sandbox = simulateChangePlan(store, plan);
+    job.sandbox = {
+      applied: sandbox.applied,
+      diff: sandbox.diff,
+      preview: compactConfig(sandbox.after)
+    };
+    markStage(job, 'sandbox', 'done', sandbox.applied.join(' '));
     markStage(job, 'test', 'running');
 
-    const testResult = runClinicalRegression(store, plan);
+    const testResult = runClinicalRegression(sandbox.sandboxStore, plan);
     job.testResult = testResult;
     markStage(job, 'test', testResult.passed ? 'done' : 'failed', testResult.checks.map((check) => check.detail).join(' '));
 
@@ -78,38 +175,42 @@ async function executeAiJob({ store, job, aiClient, giteaClient, storage }) {
     markStage(job, 'deploy', 'running');
     const deployment = {
       id: `DEP-${Date.now()}`,
-      version: `0.${store.workflow.activeVersion}.0`,
+      version: `0.${store.workflow.activeVersion + 1}.0`,
       title: plan.title,
-      status: plan.riskLevel === 'high' ? 'pending-approval' : 'active',
+      status: 'pending-approval',
       createdAt: new Date().toISOString(),
       summary: plan.summary,
-      jobId: job.id
+      jobId: job.id,
+      riskLevel: plan.riskLevel,
+      approval: {
+        status: 'waiting',
+        requiredBy: plan.riskLevel === 'high' ? '科主任或实施负责人' : '实施负责人',
+        checklist: [
+          '确认流程变化符合医院执行路径。',
+          '确认新增或调整字段不会影响在管患者记录。',
+          '确认关键阻断规则和权限边界仍然有效。'
+        ]
+      }
     };
+    const configVersion = createConfigVersion({ job, plan, sandbox, deployment });
 
     store.deployments.unshift(deployment);
+    store.configVersions.unshift(configVersion);
     job.deployment = deployment;
+    job.configVersionId = configVersion.id;
     job.status = 'completed';
-    markStage(job, 'deploy', 'done', deployment.status === 'active' ? '已发布到预览环境。' : '已发布到待审核预览环境。');
+    markStage(job, 'deploy', 'done', '沙箱预览版本已生成，等待审批后激活。');
     markStage(job, 'source-control', 'running');
 
-    if (giteaClient.isConfigured()) {
-      const manifest = buildDeliveryManifest({ store, job, plan, testResult, deployment });
-      job.sourceControl = await giteaClient.upsertFile({
-        filePath: `ai-deliveries/${job.id}.json`,
-        content: `${JSON.stringify(manifest, null, 2)}\n`,
-        message: `AI定制变更：${plan.title}`
-      });
-      markStage(job, 'source-control', 'done', '变更计划、测试结果和发布记录已保存。');
-    } else {
-      markStage(job, 'source-control', 'done', '变更计划、测试结果和发布记录已保存。');
-    }
+    job.sourceControl = await writeDeliveryArtifacts({ giteaClient, store, job, plan, testResult, deployment, sandbox, configVersion });
+    markStage(job, 'source-control', 'done', '变更计划、配置快照、差异和测试结果已保存。');
 
     store.auditLog.push({
       id: `AUD-${Date.now() + 1}`,
       at: new Date().toISOString(),
       actor: 'ai-delivery-agent',
       action: 'complete-ai-job',
-      detail: `${job.id} 完成：${plan.title}`
+      detail: `${job.id} 生成待审批预览：${plan.title}`
     });
   } catch (error) {
     job.status = 'failed';
@@ -163,6 +264,10 @@ export async function createApiServer({ port = 8750, host = '127.0.0.1', dataDir
       roles: store.roles,
       workflow: store.workflow,
       rules: store.rules,
+      uiLayouts: store.uiLayouts,
+      uiPanels: store.uiPanels,
+      reportTemplates: store.reportTemplates,
+      permissionMatrix: store.permissionMatrix,
       patients: store.patients,
       appointments: store.appointments,
       equipment: store.equipment,
@@ -170,16 +275,8 @@ export async function createApiServer({ port = 8750, host = '127.0.0.1', dataDir
       followUps: store.followUps,
       aiJobs: store.aiJobs,
       deployments: store.deployments,
+      configVersions: store.configVersions,
       auditLog: store.auditLog.slice(-30).reverse(),
-      integrations: {
-        aiModel: process.env.AI_MODEL || null,
-        gitea: giteaClient.publicConfig(),
-        jenkins: {
-          enabled: Boolean(process.env.JENKINS_URL),
-          url: process.env.JENKINS_URL || null,
-          role: 'optional-external-pipeline'
-        }
-      },
       dashboard: buildDashboard(store)
     });
   }));
@@ -254,24 +351,158 @@ export async function createApiServer({ port = 8750, host = '127.0.0.1', dataDir
         throw new Error('未找到可审批的发布记录。');
       }
 
+      const configVersion = store.configVersions.find((item) => item.id === job.configVersionId);
+      if (!configVersion) {
+        throw new Error('未找到待激活的配置版本。');
+      }
+
+      if (configVersion.status === 'active') {
+        return store;
+      }
+
+      // Approval is the release switch: the validated config snapshot replaces
+      // the active runtime configuration and receives a new workflow version.
+      applyConfigSlice(store, configVersion.after);
+      store.workflow.activeVersion += 1;
+      store.workflow.updatedAt = new Date().toISOString();
+
+      for (const version of store.configVersions) {
+        if (version.status === 'active') {
+          version.status = 'superseded';
+        }
+      }
+      for (const existingDeployment of store.deployments) {
+        if (existingDeployment.status === 'active') {
+          existingDeployment.status = 'superseded';
+        }
+      }
+
+      const now = new Date().toISOString();
+      const approval = {
+        at: now,
+        actor: req.body?.operator || 'delivery-manager',
+        decision: 'approved',
+        comment: req.body?.comment || '审批通过，激活预览配置。'
+      };
+
+      configVersion.status = 'active';
+      configVersion.activatedAt = now;
+      configVersion.approvals ||= [];
+      configVersion.approvals.push(approval);
+
       job.deployment.status = 'active';
+      job.deployment.activatedAt = now;
+      job.deployment.approval = {
+        ...(job.deployment.approval || {}),
+        status: 'approved',
+        approvedAt: now,
+        approvedBy: approval.actor,
+        comment: approval.comment
+      };
+
       const deployment = store.deployments.find((item) => item.id === job.deployment.id);
       if (deployment) {
         deployment.status = 'active';
+        deployment.activatedAt = now;
+        deployment.approval = job.deployment.approval;
       }
 
       store.auditLog.push({
         id: `AUD-${Date.now()}`,
         at: new Date().toISOString(),
-        actor: req.body?.operator || 'delivery-manager',
+        actor: approval.actor,
         action: 'approve-ai-deployment',
-        detail: `审批通过 ${job.deployment.title}。`
+        detail: `审批通过并激活 ${job.deployment.title}。`
       });
 
       return store;
     });
 
     res.json(nextStore.aiJobs.find((item) => item.id === req.params.id));
+  }));
+
+  app.post('/api/deployments/:id/rollback', asyncRoute(async (req, res) => {
+    const nextStore = await storage.update((store) => {
+      const beforeRollback = cloneConfigSlice(store);
+      const targetDeployment = store.deployments.find((deployment) => deployment.id === req.params.id);
+      if (!targetDeployment) {
+        throw new Error('未找到可回滚的版本。');
+      }
+
+      const targetVersion = store.configVersions.find((version) => version.deploymentId === targetDeployment.id);
+      if (!targetVersion?.after) {
+        throw new Error('该版本没有可恢复的配置快照。');
+      }
+
+      // Rollback is implemented as a new active version so the audit trail keeps
+      // both the failed direction and the recovery action.
+      applyConfigSlice(store, targetVersion.after);
+      store.workflow.activeVersion += 1;
+      store.workflow.updatedAt = new Date().toISOString();
+      const afterRollback = cloneConfigSlice(store);
+
+      for (const version of store.configVersions) {
+        if (version.status === 'active') {
+          version.status = 'superseded';
+        }
+      }
+      for (const deployment of store.deployments) {
+        if (deployment.status === 'active') {
+          deployment.status = 'superseded';
+        }
+      }
+
+      const now = new Date().toISOString();
+      const rollbackDeployment = {
+        id: `DEP-${Date.now()}`,
+        version: `0.${store.workflow.activeVersion}.0`,
+        title: `回滚到 ${targetVersion.title}`,
+        status: 'active',
+        createdAt: now,
+        activatedAt: now,
+        summary: req.body?.reason || `恢复配置版本 ${targetVersion.version}`,
+        rollbackOf: targetDeployment.id
+      };
+      const rollbackVersion = {
+        id: `CFG-${Date.now()}`,
+        version: rollbackDeployment.version,
+        title: rollbackDeployment.title,
+        status: 'active',
+        createdAt: now,
+        activatedAt: now,
+        deploymentId: rollbackDeployment.id,
+        rollbackOf: targetVersion.id,
+        before: beforeRollback,
+        after: afterRollback,
+        diff: targetVersion.diff || [],
+        approvals: [
+          {
+            at: now,
+            actor: req.body?.operator || 'delivery-manager',
+            decision: 'rollback',
+            comment: req.body?.reason || '恢复已验证配置版本。'
+          }
+        ]
+      };
+
+      store.deployments.unshift(rollbackDeployment);
+      store.configVersions.unshift(rollbackVersion);
+      store.auditLog.push({
+        id: `AUD-${Date.now() + 1}`,
+        at: now,
+        actor: req.body?.operator || 'delivery-manager',
+        action: 'rollback-deployment',
+        detail: `回滚到 ${targetVersion.title}。`
+      });
+
+      return store;
+    });
+
+    res.json({
+      deployment: nextStore.deployments[0],
+      configVersion: nextStore.configVersions[0],
+      workflow: nextStore.workflow
+    });
   }));
 
   app.use((error, req, res, next) => {
