@@ -70,7 +70,20 @@ python scripts/init_gitea_repo.py
 
 仓库地址：`https://gitea.jaycode.online/gitadmin/radiotherapy-workflow-system`
 
-AI 定制任务完成后会在仓库的 `ai-deliveries/<job-id>/` 目录生成 `manifest.json`、`config-before.json`、`config-after.json` 和 `config-diff.json`。Gitea Actions 工作流位于 `.gitea/workflows/verify.yml`，用于 push 后执行测试和前端构建。Jenkins 可以作为企业环境里的外部流水线执行器接入，当前主链路由系统后端完成沙箱预览、业务安全检查、审批激活、回滚和 Gitea 留痕。
+AI 定制任务完成后会在仓库的 `ai-deliveries/<job-id>/` 目录生成 `manifest.json`、`config-before.json`、`config-after.json` 和 `config-diff.json`。Gitea Actions 工作流位于 `.gitea/workflows/verify.yml`，用于 push 后执行测试和前端构建。
+
+## Jenkins 自动部署
+
+仓库根目录的 `Jenkinsfile` 是主部署流水线。`main` 分支收到 Gitea push 事件后，Jenkins 执行：
+
+```text
+npm ci
+npm test
+npm run build
+python3 scripts/deploy_server.py
+```
+
+部署脚本会更新 `38.76.162.229` 上的 `rt-ai-workbench` 服务，服务端口为 `8750`。Gitea 仓库 Webhook 指向 Jenkins 任务的构建入口后，提交到 `main` 会自动完成验证、构建和远端服务更新。
 
 ## 验证
 
@@ -100,4 +113,4 @@ Windows 桌面端输出到 `release/放疗流程管理系统-win-x64/`。打开 
 
 这个项目回答的是“开发人员如何基于现有放疗流程管理软件，利用 AI 完成客户定制化需求”。主系统先解决放疗业务闭环，把高频变化点抽象成版本化配置：流程节点、表单字段、规则、页面布局、报表模板和权限矩阵。AI 定制助手通过后端 OpenAI 兼容接口调用大模型，读取现有配置，把医院需求转成受约束的变更计划，在沙箱中生成配置差异并运行安全检查，审批后激活为新的配置版本。
 
-这个方案把传统“改代码、开发自测、测试环境、生产发版”的高频小定制，压缩为“AI 生成配置版本、系统自动验证、负责人审批激活、必要时回滚”。Gitea 用来证明每次 AI 修改都有需求、计划、测试结果、配置前后快照和 diff。Jenkins 可以作为企业环境里的外部流水线执行器接入；当前主链路优先展示配置化快速交付。
+这个方案把传统“改代码、开发自测、测试环境、生产发版”的高频小定制，压缩为“AI 生成配置版本、系统自动验证、负责人审批激活、必要时回滚”。Gitea 用来证明每次 AI 修改都有需求、计划、测试结果、配置前后快照和 diff。Jenkins 负责把主分支提交自动验证、构建并部署到远端运行服务。

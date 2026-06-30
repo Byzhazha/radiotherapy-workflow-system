@@ -641,12 +641,18 @@ function CustomizationAssistant({ state, onRefresh }) {
     setRunning(true);
     setMessage('');
     try {
-      await api('/api/ai/jobs', {
+      const createdJob = await api('/api/ai/jobs', {
         method: 'POST',
         body: JSON.stringify({ requirement })
       });
       await onRefresh();
-      setMessage('已生成沙箱预览，完成业务安全检查后可审批激活。');
+      if (createdJob.status === 'completed') {
+        setMessage('已生成沙箱预览，完成业务安全检查后可审批激活。');
+      } else if (createdJob.status === 'failed') {
+        setMessage(`生成失败：${jobFailureDetail(createdJob)}`);
+      } else {
+        setMessage('需求已提交，执行结果会在右侧更新。');
+      }
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -739,7 +745,7 @@ function CustomizationAssistant({ state, onRefresh }) {
             {approving ? '正在激活...' : '审批并激活预览'}
           </button>
         )}
-        {message && <div className="message-line">{message}</div>}
+        {message && <div className={cx('message-line', message.includes('失败') && 'error')}>{message}</div>}
       </section>
 
       <section className="panel">
@@ -950,6 +956,11 @@ function JobDetail({ job }) {
       )}
     </div>
   );
+}
+
+function jobFailureDetail(job) {
+  const failedStage = job.stages?.find((stage) => stage.status === 'failed');
+  return deliveryLogDetail(job.error || failedStage?.detail || '请查看右侧执行结果。');
 }
 
 function stageName(stage) {

@@ -33,11 +33,38 @@ export class OpenAiCompatibleClient {
     }
 
     const payload = await response.json();
-    const content = payload?.choices?.[0]?.message?.content;
+    const choice = payload?.choices?.[0];
+    const content = extractChoiceContent(choice);
     if (!content) {
-      throw new Error('AI服务未返回有效内容。');
+      const reason = choice?.finish_reason ? `，结束原因：${choice.finish_reason}` : '';
+      throw new Error(`AI服务未返回有效内容${reason}。`);
     }
 
     return content;
   }
+}
+
+export function extractChoiceContent(choice) {
+  const message = choice?.message || {};
+  const content = message.content ?? choice?.text;
+
+  // OpenAI-compatible providers differ slightly: most return a string, while
+  // some proxy multimodal-style content as typed array segments.
+  if (typeof content === 'string') {
+    return content.trim();
+  }
+
+  if (Array.isArray(content)) {
+    return content
+      .map((part) => {
+        if (typeof part === 'string') {
+          return part;
+        }
+        return part?.text || part?.content || '';
+      })
+      .join('')
+      .trim();
+  }
+
+  return '';
 }
