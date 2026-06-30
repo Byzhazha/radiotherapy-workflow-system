@@ -6,3 +6,4 @@ data/backups/
 .env
 .env.local
 *.log
+*.pdf
