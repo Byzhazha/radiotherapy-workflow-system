@@ -48,6 +48,21 @@ function markStage(job, stageId, status, detail) {
   job.updatedAt = new Date().toISOString();
 }
 
+function configVersionMinor(version) {
+  const match = /^0\.(\d+)\.0$/.exec(String(version || ''));
+  return match ? Number(match[1]) : 0;
+}
+
+function nextConfigVersion(store) {
+  // 配置发布版本面向业务展示，不能用内部流程运行版本号来推导。
+  const knownVersions = [
+    ...(store.configVersions || []).map((version) => version.version),
+    ...(store.deployments || []).map((deployment) => deployment.version)
+  ];
+  const maxMinor = knownVersions.reduce((max, version) => Math.max(max, configVersionMinor(version)), 0);
+  return `0.${maxMinor + 1}.0`;
+}
+
 function compactConfig(config) {
   // Job payloads keep a compact preview so the desktop UI can render diffs
   // quickly while full before/after snapshots remain in configVersions/Gitea.
@@ -82,6 +97,78 @@ function compactConfig(config) {
     })),
     permissionRoles: Object.keys(config.permissionMatrix)
   };
+}
+
+function approveConfigVersion(store, { configVersionId, jobId, operator, comment }) {
+  const configVersion = store.configVersions.find((item) => item.id === configVersionId || (jobId && item.jobId === jobId));
+  if (!configVersion) {
+    throw new Error('未找到待激活的配置版本。');
+  }
+
+  const deployment = store.deployments.find((item) => item.id === configVersion.deploymentId);
+  if (!deployment) {
+    throw new Error('未找到可审批的发布记录。');
+  }
+
+  const job = store.aiJobs.find((item) => item.id === configVersion.jobId);
+  if (configVersion.status === 'active') {
+    return { job, configVersion, deployment };
+  }
+
+  // 待审批状态落在配置版本上，刷新或重开桌面端后仍能激活同一份快照。
+  applyConfigSlice(store, configVersion.after);
+  store.workflow.activeVersion += 1;
+  store.workflow.updatedAt = new Date().toISOString();
+
+  for (const version of store.configVersions) {
+    if (version.status === 'active') {
+      version.status = 'superseded';
+    }
+  }
+  for (const existingDeployment of store.deployments) {
+    if (existingDeployment.status === 'active') {
+      existingDeployment.status = 'superseded';
+    }
+  }
+
+  const now = new Date().toISOString();
+  const approval = {
+    at: now,
+    actor: operator || 'delivery-manager',
+    decision: 'approved',
+    comment: comment || '审批通过，激活预览配置。'
+  };
+
+  configVersion.status = 'active';
+  configVersion.activatedAt = now;
+  configVersion.approvals ||= [];
+  configVersion.approvals.push(approval);
+
+  deployment.status = 'active';
+  deployment.activatedAt = now;
+  deployment.approval = {
+    ...(deployment.approval || {}),
+    status: 'approved',
+    approvedAt: now,
+    approvedBy: approval.actor,
+    comment: approval.comment
+  };
+
+  if (job?.deployment) {
+    job.deployment.status = 'active';
+    job.deployment.activatedAt = now;
+    job.deployment.approval = deployment.approval;
+  }
+
+  store.auditLog.push({
+    id: `AUD-${Date.now()}`,
+    at: new Date().toISOString(),
+    actor: approval.actor,
+    action: 'approve-ai-deployment',
+    detail: `审批通过并激活 ${deployment.title}。`
+  });
+
+  return { job, configVersion, deployment };
 }
 
 function createConfigVersion({ job, plan, sandbox, deployment }) {
@@ -175,7 +262,7 @@ async function executeAiJob({ store, job, aiClient, giteaClient, storage }) {
     markStage(job, 'deploy', 'running');
     const deployment = {
       id: `DEP-${Date.now()}`,
-      version: `0.${store.workflow.activeVersion + 1}.0`,
+      version: nextConfigVersion(store),
       title: plan.title,
       status: 'pending-approval',
       createdAt: new Date().toISOString(),
@@ -347,78 +434,35 @@ export async function createApiServer({ port = 8750, host = '127.0.0.1', dataDir
   app.post('/api/ai/jobs/:id/approve', asyncRoute(async (req, res) => {
     const nextStore = await storage.update((store) => {
       const job = store.aiJobs.find((item) => item.id === req.params.id);
-      if (!job?.deployment) {
+      if (!job?.configVersionId) {
         throw new Error('未找到可审批的发布记录。');
       }
 
-      const configVersion = store.configVersions.find((item) => item.id === job.configVersionId);
-      if (!configVersion) {
-        throw new Error('未找到待激活的配置版本。');
-      }
-
-      if (configVersion.status === 'active') {
-        return store;
-      }
-
-      // Approval is the release switch: the validated config snapshot replaces
-      // the active runtime configuration and receives a new workflow version.
-      applyConfigSlice(store, configVersion.after);
-      store.workflow.activeVersion += 1;
-      store.workflow.updatedAt = new Date().toISOString();
-
-      for (const version of store.configVersions) {
-        if (version.status === 'active') {
-          version.status = 'superseded';
-        }
-      }
-      for (const existingDeployment of store.deployments) {
-        if (existingDeployment.status === 'active') {
-          existingDeployment.status = 'superseded';
-        }
-      }
-
-      const now = new Date().toISOString();
-      const approval = {
-        at: now,
-        actor: req.body?.operator || 'delivery-manager',
-        decision: 'approved',
-        comment: req.body?.comment || '审批通过，激活预览配置。'
-      };
-
-      configVersion.status = 'active';
-      configVersion.activatedAt = now;
-      configVersion.approvals ||= [];
-      configVersion.approvals.push(approval);
-
-      job.deployment.status = 'active';
-      job.deployment.activatedAt = now;
-      job.deployment.approval = {
-        ...(job.deployment.approval || {}),
-        status: 'approved',
-        approvedAt: now,
-        approvedBy: approval.actor,
-        comment: approval.comment
-      };
-
-      const deployment = store.deployments.find((item) => item.id === job.deployment.id);
-      if (deployment) {
-        deployment.status = 'active';
-        deployment.activatedAt = now;
-        deployment.approval = job.deployment.approval;
-      }
-
-      store.auditLog.push({
-        id: `AUD-${Date.now()}`,
-        at: new Date().toISOString(),
-        actor: approval.actor,
-        action: 'approve-ai-deployment',
-        detail: `审批通过并激活 ${job.deployment.title}。`
+      approveConfigVersion(store, {
+        jobId: job.id,
+        configVersionId: job.configVersionId,
+        operator: req.body?.operator,
+        comment: req.body?.comment
       });
 
       return store;
     });
 
     res.json(nextStore.aiJobs.find((item) => item.id === req.params.id));
+  }));
+
+  app.post('/api/config-versions/:id/approve', asyncRoute(async (req, res) => {
+    const nextStore = await storage.update((store) => {
+      approveConfigVersion(store, {
+        configVersionId: req.params.id,
+        operator: req.body?.operator,
+        comment: req.body?.comment
+      });
+
+      return store;
+    });
+
+    res.json(nextStore.configVersions.find((item) => item.id === req.params.id));
   }));
 
   app.post('/api/deployments/:id/rollback', asyncRoute(async (req, res) => {
@@ -455,7 +499,7 @@ export async function createApiServer({ port = 8750, host = '127.0.0.1', dataDir
       const now = new Date().toISOString();
       const rollbackDeployment = {
         id: `DEP-${Date.now()}`,
-        version: `0.${store.workflow.activeVersion}.0`,
+        version: nextConfigVersion(store),
         title: `回滚到 ${targetVersion.title}`,
         status: 'active',
         createdAt: now,

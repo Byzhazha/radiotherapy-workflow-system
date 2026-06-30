@@ -1026,6 +1026,19 @@ code {
   margin-top: 3px;
 }
 
+.version-actions {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  min-width: 0;
+}
+
+.ghost-button.approve-inline {
+  min-height: 32px;
+  padding: 0 11px;
+}
+
 .diff-grid {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }

@@ -643,6 +643,7 @@ function CustomizationAssistant({ state, onRefresh }) {
   const [currentJob, setCurrentJob] = useState(null);
   const [running, setRunning] = useState(false);
   const [approving, setApproving] = useState(false);
+  const [approvingVersionId, setApprovingVersionId] = useState('');
   const [rollingBackId, setRollingBackId] = useState('');
   const [message, setMessage] = useState('');
 
@@ -694,6 +695,37 @@ function CustomizationAssistant({ state, onRefresh }) {
     }
   }
 
+  async function approveConfigVersion(versionId) {
+    setApprovingVersionId(versionId);
+    setMessage('');
+    try {
+      const approvedVersion = await api(`/api/config-versions/${versionId}/approve`, {
+        method: 'POST',
+        body: JSON.stringify({
+          operator: 'delivery-manager',
+          comment: '已核对预览差异、测试结果和审批清单。'
+        })
+      });
+      const approvedJob = state.aiJobs.find((job) => job.id === approvedVersion.jobId);
+      if (approvedJob) {
+        setCurrentJob({
+          ...approvedJob,
+          deployment: {
+            ...(approvedJob.deployment || {}),
+            status: 'active',
+            activatedAt: approvedVersion.activatedAt
+          }
+        });
+      }
+      await onRefresh();
+      setMessage('待审核版本已审批并激活。');
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setApprovingVersionId('');
+    }
+  }
+
   async function rollbackDeployment(deploymentId) {
     setRollingBackId(deploymentId);
     setMessage('');
@@ -719,6 +751,7 @@ function CustomizationAssistant({ state, onRefresh }) {
     .filter((log) => ['complete-ai-job', 'apply-change-plan', 'approve-ai-deployment', 'rollback-deployment'].includes(log.action))
     .slice(0, 5);
   const canApprove = latestJob?.deployment?.status === 'pending-approval';
+  const hasPendingVersions = state.configVersions.some((version) => version.status === 'pending-approval');
   const rollbackTargets = state.deployments.filter((deployment) => deployment.status === 'active' || deployment.status === 'superseded').slice(0, 5);
 
   return (
@@ -766,7 +799,7 @@ function CustomizationAssistant({ state, onRefresh }) {
       </section>
 
       <section className="panel span-two">
-        <PanelHeader icon={ClipboardCheck} title="版本与回滚" subtitle="查看已生成配置版本，恢复经过验证的版本" />
+        <PanelHeader icon={ClipboardCheck} title="版本与回滚" subtitle={hasPendingVersions ? '待审核版本可在这里继续审批，已验证版本可恢复' : '查看已生成配置版本，恢复经过验证的版本'} />
         <div className="delivery-board">
           <div>
             <h3>配置版本</h3>
@@ -777,7 +810,15 @@ function CustomizationAssistant({ state, onRefresh }) {
                     <strong>{version.version}</strong>
                     <span>{version.title}</span>
                   </div>
-                  <StatusPill tone={version.status === 'active' ? 'green' : version.status === 'pending-approval' ? 'amber' : 'red'} icon={Activity} text={deliveryStatusLabel(version.status)} />
+                  <div className="version-actions">
+                    <StatusPill tone={version.status === 'active' ? 'green' : version.status === 'pending-approval' ? 'amber' : 'red'} icon={Activity} text={deliveryStatusLabel(version.status)} />
+                    {version.status === 'pending-approval' && (
+                      <button className="ghost-button approve-inline" onClick={() => approveConfigVersion(version.id)} disabled={Boolean(approvingVersionId)}>
+                        {approvingVersionId === version.id ? <Loader2 className="spin" size={15} /> : <ShieldCheck size={15} />}
+                        审批
+                      </button>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>

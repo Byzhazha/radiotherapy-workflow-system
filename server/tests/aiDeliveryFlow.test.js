@@ -68,19 +68,24 @@ test('creates sandbox preview, activates after approval, and rolls back to a sav
 
     assert.equal(createdResponse.ok, true);
     assert.equal(job.deployment.status, 'pending-approval');
+    assert.equal(job.deployment.version, '0.2.0');
     assert.equal(job.sandbox.preview.workflow.steps.find((step) => step.id === 'treatment-schedule').slaHours, 6);
 
     const stateBeforeApproval = await (await originalFetch(`${baseUrl}/api/state`)).json();
     assert.equal(stateBeforeApproval.workflow.steps.find((step) => step.id === 'treatment-schedule').slaHours, 4);
 
-    const approved = await (await originalFetch(`${baseUrl}/api/ai/jobs/${job.id}/approve`, {
+    const pendingVersion = stateBeforeApproval.configVersions.find((version) => version.id === job.configVersionId);
+    assert.equal(pendingVersion.status, 'pending-approval');
+    const approvedVersion = await (await originalFetch(`${baseUrl}/api/config-versions/${pendingVersion.id}/approve`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ operator: 'unit-test', comment: '验证通过。' })
     })).json();
-    assert.equal(approved.deployment.status, 'active');
+    assert.equal(approvedVersion.status, 'active');
 
     const stateAfterApproval = await (await originalFetch(`${baseUrl}/api/state`)).json();
+    const approvedJob = stateAfterApproval.aiJobs.find((item) => item.id === job.id);
+    assert.equal(approvedJob.deployment.status, 'active');
     assert.equal(stateAfterApproval.workflow.steps.find((step) => step.id === 'treatment-schedule').slaHours, 6);
 
     const baseDeployment = stateAfterApproval.deployments.find((deployment) => deployment.id === 'DEP-BASE');
@@ -92,6 +97,7 @@ test('creates sandbox preview, activates after approval, and rolls back to a sav
     const rollback = await rollbackResponse.json();
 
     assert.equal(rollbackResponse.ok, true);
+    assert.equal(rollback.configVersion.version, '0.3.0');
     assert.equal(rollback.workflow.steps.find((step) => step.id === 'treatment-schedule').slaHours, 4);
   } finally {
     if (server) {
