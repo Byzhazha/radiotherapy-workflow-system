@@ -1,0 +1,14 @@
+[
+  {
+    "area": "workflow",
+    "action": "updated",
+    "id": "plan-design",
+    "title": "计划设计"
+  },
+  {
+    "area": "rules",
+    "action": "added",
+    "id": "prescription-dose-over-60-director-review",
+    "title": "处方剂量大于60Gy主任审核"
+  }
+]
