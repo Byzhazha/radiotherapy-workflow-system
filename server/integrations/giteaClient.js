@@ -138,26 +138,51 @@ export class GiteaClient {
   }
 
   async upsertFiles({ files, message, branch = this.branch }) {
-    const results = [];
-
-    // Keep each artifact addressable in the repository so reviewers can inspect
-    // the manifest, config snapshot, and diff independently.
-    for (const file of files) {
-      results.push(await this.upsertFile({
-        filePath: file.filePath,
-        content: file.content,
+    const repoUrl = `${this.baseUrl}/${this.owner}/${this.repo}`;
+    const result = await this.request(
+      'POST',
+      `/repos/${encodeURIComponent(this.owner)}/${encodeURIComponent(this.repo)}/contents`,
+      {
+        branch,
         message,
-        branch
-      }));
-    }
+        author: {
+          name: 'AI Delivery Agent',
+          email: 'ai-delivery@radiotherapy.local'
+        },
+        committer: {
+          name: 'AI Delivery Agent',
+          email: 'ai-delivery@radiotherapy.local'
+        },
+        // Gitea's batch contents endpoint commits all delivery artifacts as one
+        // reviewable change while keeping the individual JSON files addressable.
+        files: files.map((file) => ({
+          operation: 'upload',
+          path: file.filePath,
+          content: Buffer.from(file.content, 'utf8').toString('base64')
+        }))
+      }
+    );
 
     return {
       provider: 'gitea',
       branch,
-      files: results,
-      repoUrl: results[0]?.repoUrl || `${this.baseUrl}/${this.owner}/${this.repo}`,
-      commitSha: results.at(-1)?.commitSha || null,
-      commitUrl: results.at(-1)?.commitUrl || null
+      files: (result.files || files).map((file, index) => {
+        const filePath = file.path || files[index]?.filePath;
+        return {
+          provider: 'gitea',
+          owner: this.owner,
+          repo: this.repo,
+          branch,
+          path: filePath,
+          commitSha: result.commit?.sha || null,
+          commitUrl: result.commit?.html_url || null,
+          fileUrl: file.html_url || `${repoUrl}/src/branch/${branch}/${filePath}`,
+          repoUrl
+        };
+      }),
+      repoUrl,
+      commitSha: result.commit?.sha || null,
+      commitUrl: result.commit?.html_url || null
     };
   }
 }
