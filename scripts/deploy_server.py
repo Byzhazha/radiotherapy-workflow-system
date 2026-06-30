@@ -14,9 +14,9 @@ USER = "root"
 PASSWORD = "OEVLQtb22Pz5$#t@"
 REMOTE_DIR = "/opt/rt-ai-workbench"
 SERVICE_NAME = "rt-ai-workbench"
-REMOTE_ENV = """AI_BASE_URL=https://zz1cc.cc.cd/v1
-AI_API_KEY=sk-nSeb0stRJtTbeDqJLLqb3lX5nOa6FtfGilV8Zcy6ihROzZlB
-AI_MODEL=gpt-5.5
+REMOTE_ENV = """AI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+AI_API_KEY=sk-d71e2b231cfe4a15b8bb13f8fff6843b
+AI_MODEL=qwen3.7-plus
 RT_API_PORT=8750
 RT_API_HOST=0.0.0.0
 GITEA_BASE_URL=https://gitea.jaycode.online
