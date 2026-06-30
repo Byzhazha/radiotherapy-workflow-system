@@ -1,0 +1,1296 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-06-30T07:30:52.047Z",
+  "job": {
+    "id": "AI-1782804620869",
+    "requirement": "给护士角色增加查看报表权限，并允许护士处理治疗排程和随访两个流程节点。",
+    "status": "completed"
+  },
+  "plan": {
+    "title": "护士角色权限与流程节点调整",
+    "intent": "赋予护士查看报表权限，并将随访节点的处理角色调整为护士，同时明确其负责的治疗排程和随访节点。",
+    "riskLevel": "medium",
+    "summary": "更新随访节点的处理角色为护士，并为护士角色开启报表查看权限及对应的工作流节点权限。",
+    "operations": [
+      {
+        "type": "updateWorkflowStep",
+        "stepId": "follow-up",
+        "patch": {
+          "role": "nurse"
+        }
+      },
+      {
+        "type": "updatePermission",
+        "roleId": "nurse",
+        "patch": {
+          "canViewReports": true,
+          "workflowStepIds": [
+            "treatment-schedule",
+            "follow-up"
+          ]
+        }
+      }
+    ],
+    "verification": [
+      "验证护士角色是否拥有canViewReports权限",
+      "验证随访节点的处理角色是否已更新为nurse",
+      "验证护士的workflowStepIds是否包含treatment-schedule和follow-up"
+    ]
+  },
+  "testResult": {
+    "passed": true,
+    "checks": [
+      {
+        "name": "流程节点唯一性",
+        "passed": true,
+        "detail": "共 11 个流程节点，ID 均唯一。"
+      },
+      {
+        "name": "角色权限闭环",
+        "passed": true,
+        "detail": "每个节点都绑定到已登记角色。"
+      },
+      {
+        "name": "表单定义完整性",
+        "passed": true,
+        "detail": "节点表单均可由客户端渲染。"
+      },
+      {
+        "name": "在管患者流程落点",
+        "passed": true,
+        "detail": "所有在管患者都停留在有效流程节点。"
+      },
+      {
+        "name": "必填表单可执行性",
+        "passed": true,
+        "detail": "必填字段都有可展示名称。"
+      },
+      {
+        "name": "关键规则保留",
+        "passed": true,
+        "detail": "保留 1 条关键阻断规则。"
+      },
+      {
+        "name": "权限矩阵流程引用",
+        "passed": true,
+        "detail": "角色权限只引用有效流程节点。"
+      },
+      {
+        "name": "页面布局可渲染",
+        "passed": true,
+        "detail": "页面布局都有可渲染区块。"
+      },
+      {
+        "name": "报表模板数据契约",
+        "passed": true,
+        "detail": "报表模板都有明确数据集和字段。"
+      },
+      {
+        "name": "核心治疗路径保留",
+        "passed": true,
+        "detail": "登记、会诊、计划、物理审核和治疗排程路径完整。"
+      },
+      {
+        "name": "高风险变更人工确认",
+        "passed": true,
+        "detail": "变更风险等级允许自动进入预览环境。"
+      }
+    ]
+  },
+  "deployment": {
+    "id": "DEP-1782804652046",
+    "version": "0.6.0",
+    "title": "护士角色权限与流程节点调整",
+    "status": "pending-approval",
+    "createdAt": "2026-06-30T07:30:52.046Z",
+    "summary": "更新随访节点的处理角色为护士，并为护士角色开启报表查看权限及对应的工作流节点权限。",
+    "jobId": "AI-1782804620869",
+    "riskLevel": "medium",
+    "approval": {
+      "status": "waiting",
+      "requiredBy": "实施负责人",
+      "checklist": [
+        "确认流程变化符合医院执行路径。",
+        "确认新增或调整字段不会影响在管患者记录。",
+        "确认关键阻断规则和权限边界仍然有效。"
+      ]
+    }
+  },
+  "configVersion": {
+    "id": "CFG-1782804652046",
+    "version": "0.6.0",
+    "title": "护士角色权限与流程节点调整",
+    "status": "pending-approval",
+    "createdAt": "2026-06-30T07:30:52.046Z",
+    "deploymentId": "DEP-1782804652046",
+    "jobId": "AI-1782804620869",
+    "requirement": "给护士角色增加查看报表权限，并允许护士处理治疗排程和随访两个流程节点。",
+    "riskLevel": "medium",
+    "summary": "更新随访节点的处理角色为护士，并为护士角色开启报表查看权限及对应的工作流节点权限。",
+    "before": {
+      "workflow": {
+        "id": "rt-standard",
+        "name": "放疗标准流程",
+        "activeVersion": 5,
+        "updatedAt": "2026-06-30T06:38:42.447Z",
+        "steps": [
+          {
+            "id": "registration",
+            "name": "患者登记",
+            "role": "registrar",
+            "slaHours": 4,
+            "room": "门诊登记",
+            "formFields": [
+              {
+                "key": "diagnosis",
+                "label": "诊断",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "stage",
+                "label": "分期",
+                "type": "select",
+                "required": true,
+                "options": [
+                  "I",
+                  "II",
+                  "III",
+                  "IV"
+                ]
+              }
+            ],
+            "qualityChecks": [
+              "身份核验",
+              "病历资料完整"
+            ]
+          },
+          {
+            "id": "consultation",
+            "name": "放疗会诊",
+            "role": "doctor",
+            "slaHours": 12,
+            "room": "医生工作站",
+            "formFields": [
+              {
+                "key": "intent",
+                "label": "治疗目的",
+                "type": "select",
+                "required": true,
+                "options": [
+                  "根治",
+                  "辅助",
+                  "姑息"
+                ]
+              },
+              {
+                "key": "site",
+                "label": "治疗部位",
+                "type": "text",
+                "required": true
+              }
+            ],
+            "qualityChecks": [
+              "适应证确认",
+              "既往治疗核对"
+            ]
+          },
+          {
+            "id": "ct-simulation",
+            "name": "CT定位",
+            "role": "technician",
+            "slaHours": 24,
+            "room": "CT模拟定位室",
+            "formFields": [
+              {
+                "key": "immobilization",
+                "label": "固定方式",
+                "type": "select",
+                "required": true,
+                "options": [
+                  "头颈肩膜",
+                  "体膜",
+                  "真空垫"
+                ]
+              },
+              {
+                "key": "scanRange",
+                "label": "扫描范围",
+                "type": "text",
+                "required": true
+              }
+            ],
+            "qualityChecks": [
+              "定位图像上传",
+              "体位固定记录"
+            ]
+          },
+          {
+            "id": "contouring",
+            "name": "靶区勾画",
+            "role": "doctor",
+            "slaHours": 24,
+            "room": "勾画工作站",
+            "formFields": [
+              {
+                "key": "gtv",
+                "label": "GTV",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "ptvMargin",
+                "label": "PTV外扩(mm)",
+                "type": "number",
+                "required": true
+              }
+            ],
+            "qualityChecks": [
+              "ROI命名规范",
+              "危及器官完整"
+            ]
+          },
+          {
+            "id": "plan-design",
+            "name": "计划设计",
+            "role": "physicist",
+            "slaHours": 24,
+            "room": "计划室",
+            "formFields": [
+              {
+                "key": "technique",
+                "label": "照射技术",
+                "type": "select",
+                "required": true,
+                "options": [
+                  "IMRT",
+                  "VMAT",
+                  "SBRT",
+                  "3D-CRT"
+                ]
+              },
+              {
+                "key": "totalDoseGy",
+                "label": "处方剂量(Gy)",
+                "type": "number",
+                "required": true
+              },
+              {
+                "key": "fractions",
+                "label": "分次数",
+                "type": "number",
+                "required": true
+              },
+              {
+                "key": "prescriptionDoseNote",
+                "label": "处方剂量备注",
+                "type": "text",
+                "required": false,
+                "options": []
+              }
+            ],
+            "qualityChecks": [
+              "处方剂量一致",
+              "危及器官约束"
+            ]
+          },
+          {
+            "id": "physics-review",
+            "name": "物理师审核",
+            "role": "physicist",
+            "slaHours": 12,
+            "room": "质控室",
+            "formFields": [
+              {
+                "key": "gammaPassRate",
+                "label": "Gamma通过率(%)",
+                "type": "number",
+                "required": true
+              },
+              {
+                "key": "muCheck",
+                "label": "MU独立核查",
+                "type": "text",
+                "required": true
+              }
+            ],
+            "qualityChecks": [
+              "剂量验证通过",
+              "计划参数复核"
+            ]
+          },
+          {
+            "id": "director-review",
+            "name": "主任审核",
+            "role": "director",
+            "slaHours": 12,
+            "room": "主任工作站",
+            "formFields": [
+              {
+                "key": "approvalOpinion",
+                "label": "审核意见",
+                "type": "textarea",
+                "required": true
+              }
+            ],
+            "qualityChecks": [
+              "适应证复核",
+              "高风险病例确认"
+            ]
+          },
+          {
+            "id": "reset-verification",
+            "name": "复位验证",
+            "role": "technician",
+            "slaHours": 8,
+            "room": "复位验证区",
+            "formFields": [
+              {
+                "key": "igrtConclusion",
+                "label": "IGRT结论",
+                "type": "textarea",
+                "required": true
+              },
+              {
+                "key": "setupErrorMm",
+                "label": "复位误差mm",
+                "type": "number",
+                "required": true
+              }
+            ],
+            "qualityChecks": [
+              "IGRT结论已记录",
+              "复位误差已记录",
+              "复位误差数值格式校验"
+            ]
+          },
+          {
+            "id": "treatment-schedule",
+            "name": "治疗排程",
+            "role": "nurse",
+            "slaHours": 8,
+            "room": "排程中心",
+            "formFields": [
+              {
+                "key": "machineId",
+                "label": "治疗设备",
+                "type": "select",
+                "required": true,
+                "options": [
+                  "LA-1",
+                  "LA-2",
+                  "TOMO-1"
+                ]
+              },
+              {
+                "key": "firstTreatmentAt",
+                "label": "首次治疗时间",
+                "type": "datetime",
+                "required": true
+              }
+            ],
+            "qualityChecks": [
+              "设备可用",
+              "患者通知"
+            ]
+          },
+          {
+            "id": "first-treatment",
+            "name": "首次治疗",
+            "role": "technician",
+            "slaHours": 8,
+            "room": "加速器机房",
+            "formFields": [
+              {
+                "key": "igrtResult",
+                "label": "IGRT结果",
+                "type": "select",
+                "required": true,
+                "options": [
+                  "通过",
+                  "需复位",
+                  "暂停"
+                ]
+              }
+            ],
+            "qualityChecks": [
+              "摆位影像确认",
+              "治疗记录回写"
+            ]
+          },
+          {
+            "id": "follow-up",
+            "name": "随访",
+            "role": "doctor",
+            "slaHours": 168,
+            "room": "随访门诊",
+            "formFields": [
+              {
+                "key": "toxicityGrade",
+                "label": "毒性分级",
+                "type": "select",
+                "required": true,
+                "options": [
+                  "0",
+                  "1",
+                  "2",
+                  "3",
+                  "4"
+                ]
+              },
+              {
+                "key": "nextVisit",
+                "label": "下次随访",
+                "type": "date",
+                "required": true
+              }
+            ],
+            "qualityChecks": [
+              "疗效评价",
+              "不良反应记录"
+            ]
+          }
+        ]
+      },
+      "rules": [
+        {
+          "id": "high-dose-director-review",
+          "name": "高剂量主任复核",
+          "expression": "prescription.totalDoseGy >= 60",
+          "action": "director-review-required",
+          "severity": "high",
+          "enabled": true
+        },
+        {
+          "id": "low-gamma-block-treatment",
+          "name": "Gamma低通过率禁止治疗",
+          "expression": "dosePlan.gammaPassRate < 95",
+          "action": "block-treatment-schedule",
+          "severity": "critical",
+          "enabled": true
+        },
+        {
+          "id": "reset-verification-overdue-nurse-alert",
+          "name": "复位验证超8小时提醒护士长",
+          "expression": "workflow.currentStep.id == 'reset-verification' && workflow.currentStep.elapsedHours > 8",
+          "action": "notify:nurse:head_nurse:reset_verification_overdue",
+          "severity": "medium",
+          "enabled": true
+        },
+        {
+          "id": "prescription-dose-over-60-director-review",
+          "name": "处方剂量大于60Gy主任审核",
+          "expression": "totalDoseGy > 60",
+          "action": "requireDirectorReview",
+          "severity": "high",
+          "enabled": true
+        }
+      ],
+      "uiPanels": [
+        {
+          "type": "updateUiPanel",
+          "panelId": "reset-verification-panel",
+          "title": "复位验证",
+          "description": "展示复位验证节点状态、IGRT结论、复位误差及超时提醒信息，供治疗排程前核对。"
+        }
+      ],
+      "uiLayouts": [
+        {
+          "pageId": "clinical-overview",
+          "title": "临床运行总览",
+          "sections": [
+            {
+              "id": "workflow",
+              "title": "当前放疗流程",
+              "source": "workflow",
+              "display": "timeline",
+              "columns": 2,
+              "visible": true
+            },
+            {
+              "id": "patient-queue",
+              "title": "患者队列",
+              "source": "patients",
+              "display": "queue",
+              "columns": 1,
+              "visible": true
+            },
+            {
+              "id": "quality",
+              "title": "最近质控",
+              "source": "qaReports",
+              "display": "list",
+              "columns": 1,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "pageId": "delivery-workbench",
+          "title": "定制交付工作台",
+          "sections": [
+            {
+              "id": "preview",
+              "title": "沙箱预览",
+              "source": "deployments",
+              "display": "diff",
+              "columns": 2,
+              "visible": true
+            },
+            {
+              "id": "approval",
+              "title": "审批详情",
+              "source": "aiJobs",
+              "display": "approval",
+              "columns": 1,
+              "visible": true
+            }
+          ]
+        }
+      ],
+      "reportTemplates": [
+        {
+          "id": "treatment-prep-summary",
+          "name": "治疗准备汇总",
+          "audience": "放疗医生",
+          "dataset": "patients",
+          "fields": [
+            "name",
+            "diagnosis",
+            "currentStepId",
+            "prescription.totalDoseGy",
+            "dosePlan.gammaPassRate"
+          ],
+          "schedule": "manual",
+          "enabled": true
+        },
+        {
+          "id": "qa-risk-review",
+          "name": "质控风险复核",
+          "audience": "物理师",
+          "dataset": "qaReports",
+          "fields": [
+            "patientId",
+            "type",
+            "score",
+            "result",
+            "createdAt"
+          ],
+          "schedule": "daily",
+          "enabled": true
+        }
+      ],
+      "permissionMatrix": {
+        "registrar": {
+          "canEditPatients": true,
+          "canManageWorkflow": false,
+          "canApproveDeployments": false,
+          "canRollbackDeployments": false,
+          "canViewReports": true,
+          "workflowStepIds": [
+            "registration"
+          ]
+        },
+        "doctor": {
+          "canEditPatients": true,
+          "canManageWorkflow": false,
+          "canApproveDeployments": false,
+          "canRollbackDeployments": false,
+          "canViewReports": true,
+          "workflowStepIds": [
+            "consultation",
+            "contouring",
+            "follow-up"
+          ]
+        },
+        "physicist": {
+          "canEditPatients": true,
+          "canManageWorkflow": false,
+          "canApproveDeployments": false,
+          "canRollbackDeployments": false,
+          "canViewReports": true,
+          "workflowStepIds": [
+            "plan-design",
+            "physics-review"
+          ]
+        },
+        "technician": {
+          "canEditPatients": true,
+          "canManageWorkflow": false,
+          "canApproveDeployments": false,
+          "canRollbackDeployments": false,
+          "canViewReports": false,
+          "workflowStepIds": [
+            "ct-simulation",
+            "first-treatment"
+          ]
+        },
+        "director": {
+          "canEditPatients": true,
+          "canManageWorkflow": true,
+          "canApproveDeployments": true,
+          "canRollbackDeployments": true,
+          "canViewReports": true,
+          "workflowStepIds": [
+            "director-review"
+          ]
+        },
+        "nurse": {
+          "canEditPatients": true,
+          "canManageWorkflow": false,
+          "canApproveDeployments": false,
+          "canRollbackDeployments": false,
+          "canViewReports": true,
+          "workflowStepIds": [
+            "treatment-schedule"
+          ]
+        }
+      }
+    },
+    "after": {
+      "workflow": {
+        "id": "rt-standard",
+        "name": "放疗标准流程",
+        "activeVersion": 5,
+        "updatedAt": "2026-06-30T06:38:42.447Z",
+        "steps": [
+          {
+            "id": "registration",
+            "name": "患者登记",
+            "role": "registrar",
+            "slaHours": 4,
+            "room": "门诊登记",
+            "formFields": [
+              {
+                "key": "diagnosis",
+                "label": "诊断",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "stage",
+                "label": "分期",
+                "type": "select",
+                "required": true,
+                "options": [
+                  "I",
+                  "II",
+                  "III",
+                  "IV"
+                ]
+              }
+            ],
+            "qualityChecks": [
+              "身份核验",
+              "病历资料完整"
+            ]
+          },
+          {
+            "id": "consultation",
+            "name": "放疗会诊",
+            "role": "doctor",
+            "slaHours": 12,
+            "room": "医生工作站",
+            "formFields": [
+              {
+                "key": "intent",
+                "label": "治疗目的",
+                "type": "select",
+                "required": true,
+                "options": [
+                  "根治",
+                  "辅助",
+                  "姑息"
+                ]
+              },
+              {
+                "key": "site",
+                "label": "治疗部位",
+                "type": "text",
+                "required": true
+              }
+            ],
+            "qualityChecks": [
+              "适应证确认",
+              "既往治疗核对"
+            ]
+          },
+          {
+            "id": "ct-simulation",
+            "name": "CT定位",
+            "role": "technician",
+            "slaHours": 24,
+            "room": "CT模拟定位室",
+            "formFields": [
+              {
+                "key": "immobilization",
+                "label": "固定方式",
+                "type": "select",
+                "required": true,
+                "options": [
+                  "头颈肩膜",
+                  "体膜",
+                  "真空垫"
+                ]
+              },
+              {
+                "key": "scanRange",
+                "label": "扫描范围",
+                "type": "text",
+                "required": true
+              }
+            ],
+            "qualityChecks": [
+              "定位图像上传",
+              "体位固定记录"
+            ]
+          },
+          {
+            "id": "contouring",
+            "name": "靶区勾画",
+            "role": "doctor",
+            "slaHours": 24,
+            "room": "勾画工作站",
+            "formFields": [
+              {
+                "key": "gtv",
+                "label": "GTV",
+                "type": "text",
+                "required": true
+              },
+              {
+                "key": "ptvMargin",
+                "label": "PTV外扩(mm)",
+                "type": "number",
+                "required": true
+              }
+            ],
+            "qualityChecks": [
+              "ROI命名规范",
+              "危及器官完整"
+            ]
+          },
+          {
+            "id": "plan-design",
+            "name": "计划设计",
+            "role": "physicist",
+            "slaHours": 24,
+            "room": "计划室",
+            "formFields": [
+              {
+                "key": "technique",
+                "label": "照射技术",
+                "type": "select",
+                "required": true,
+                "options": [
+                  "IMRT",
+                  "VMAT",
+                  "SBRT",
+                  "3D-CRT"
+                ]
+              },
+              {
+                "key": "totalDoseGy",
+                "label": "处方剂量(Gy)",
+                "type": "number",
+                "required": true
+              },
+              {
+                "key": "fractions",
+                "label": "分次数",
+                "type": "number",
+                "required": true
+              },
+              {
+                "key": "prescriptionDoseNote",
+                "label": "处方剂量备注",
+                "type": "text",
+                "required": false,
+                "options": []
+              }
+            ],
+            "qualityChecks": [
+              "处方剂量一致",
+              "危及器官约束"
+            ]
+          },
+          {
+            "id": "physics-review",
+            "name": "物理师审核",
+            "role": "physicist",
+            "slaHours": 12,
+            "room": "质控室",
+            "formFields": [
+              {
+                "key": "gammaPassRate",
+                "label": "Gamma通过率(%)",
+                "type": "number",
+                "required": true
+              },
+              {
+                "key": "muCheck",
+                "label": "MU独立核查",
+                "type": "text",
+                "required": true
+              }
+            ],
+            "qualityChecks": [
+              "剂量验证通过",
+              "计划参数复核"
+            ]
+          },
+          {
+            "id": "director-review",
+            "name": "主任审核",
+            "role": "director",
+            "slaHours": 12,
+            "room": "主任工作站",
+            "formFields": [
+              {
+                "key": "approvalOpinion",
+                "label": "审核意见",
+                "type": "textarea",
+                "required": true
+              }
+            ],
+            "qualityChecks": [
+              "适应证复核",
+              "高风险病例确认"
+            ]
+          },
+          {
+            "id": "reset-verification",
+            "name": "复位验证",
+            "role": "technician",
+            "slaHours": 8,
+            "room": "复位验证区",
+            "formFields": [
+              {
+                "key": "igrtConclusion",
+                "label": "IGRT结论",
+                "type": "textarea",
+                "required": true
+              },
+              {
+                "key": "setupErrorMm",
+                "label": "复位误差mm",
+                "type": "number",
+                "required": true
+              }
+            ],
+            "qualityChecks": [
+              "IGRT结论已记录",
+              "复位误差已记录",
+              "复位误差数值格式校验"
+            ]
+          },
+          {
+            "id": "treatment-schedule",
+            "name": "治疗排程",
+            "role": "nurse",
+            "slaHours": 8,
+            "room": "排程中心",
+            "formFields": [
+              {
+                "key": "machineId",
+                "label": "治疗设备",
+                "type": "select",
+                "required": true,
+                "options": [
+                  "LA-1",
+                  "LA-2",
+                  "TOMO-1"
+                ]
+              },
+              {
+                "key": "firstTreatmentAt",
+                "label": "首次治疗时间",
+                "type": "datetime",
+                "required": true
+              }
+            ],
+            "qualityChecks": [
+              "设备可用",
+              "患者通知"
+            ]
+          },
+          {
+            "id": "first-treatment",
+            "name": "首次治疗",
+            "role": "technician",
+            "slaHours": 8,
+            "room": "加速器机房",
+            "formFields": [
+              {
+                "key": "igrtResult",
+                "label": "IGRT结果",
+                "type": "select",
+                "required": true,
+                "options": [
+                  "通过",
+                  "需复位",
+                  "暂停"
+                ]
+              }
+            ],
+            "qualityChecks": [
+              "摆位影像确认",
+              "治疗记录回写"
+            ]
+          },
+          {
+            "id": "follow-up",
+            "name": "随访",
+            "role": "nurse",
+            "slaHours": 168,
+            "room": "随访门诊",
+            "formFields": [
+              {
+                "key": "toxicityGrade",
+                "label": "毒性分级",
+                "type": "select",
+                "required": true,
+                "options": [
+                  "0",
+                  "1",
+                  "2",
+                  "3",
+                  "4"
+                ]
+              },
+              {
+                "key": "nextVisit",
+                "label": "下次随访",
+                "type": "date",
+                "required": true
+              }
+            ],
+            "qualityChecks": [
+              "疗效评价",
+              "不良反应记录"
+            ]
+          }
+        ]
+      },
+      "rules": [
+        {
+          "id": "high-dose-director-review",
+          "name": "高剂量主任复核",
+          "expression": "prescription.totalDoseGy >= 60",
+          "action": "director-review-required",
+          "severity": "high",
+          "enabled": true
+        },
+        {
+          "id": "low-gamma-block-treatment",
+          "name": "Gamma低通过率禁止治疗",
+          "expression": "dosePlan.gammaPassRate < 95",
+          "action": "block-treatment-schedule",
+          "severity": "critical",
+          "enabled": true
+        },
+        {
+          "id": "reset-verification-overdue-nurse-alert",
+          "name": "复位验证超8小时提醒护士长",
+          "expression": "workflow.currentStep.id == 'reset-verification' && workflow.currentStep.elapsedHours > 8",
+          "action": "notify:nurse:head_nurse:reset_verification_overdue",
+          "severity": "medium",
+          "enabled": true
+        },
+        {
+          "id": "prescription-dose-over-60-director-review",
+          "name": "处方剂量大于60Gy主任审核",
+          "expression": "totalDoseGy > 60",
+          "action": "requireDirectorReview",
+          "severity": "high",
+          "enabled": true
+        }
+      ],
+      "uiPanels": [
+        {
+          "type": "updateUiPanel",
+          "panelId": "reset-verification-panel",
+          "title": "复位验证",
+          "description": "展示复位验证节点状态、IGRT结论、复位误差及超时提醒信息，供治疗排程前核对。"
+        }
+      ],
+      "uiLayouts": [
+        {
+          "pageId": "clinical-overview",
+          "title": "临床运行总览",
+          "sections": [
+            {
+              "id": "workflow",
+              "title": "当前放疗流程",
+              "source": "workflow",
+              "display": "timeline",
+              "columns": 2,
+              "visible": true
+            },
+            {
+              "id": "patient-queue",
+              "title": "患者队列",
+              "source": "patients",
+              "display": "queue",
+              "columns": 1,
+              "visible": true
+            },
+            {
+              "id": "quality",
+              "title": "最近质控",
+              "source": "qaReports",
+              "display": "list",
+              "columns": 1,
+              "visible": true
+            }
+          ]
+        },
+        {
+          "pageId": "delivery-workbench",
+          "title": "定制交付工作台",
+          "sections": [
+            {
+              "id": "preview",
+              "title": "沙箱预览",
+              "source": "deployments",
+              "display": "diff",
+              "columns": 2,
+              "visible": true
+            },
+            {
+              "id": "approval",
+              "title": "审批详情",
+              "source": "aiJobs",
+              "display": "approval",
+              "columns": 1,
+              "visible": true
+            }
+          ]
+        }
+      ],
+      "reportTemplates": [
+        {
+          "id": "treatment-prep-summary",
+          "name": "治疗准备汇总",
+          "audience": "放疗医生",
+          "dataset": "patients",
+          "fields": [
+            "name",
+            "diagnosis",
+            "currentStepId",
+            "prescription.totalDoseGy",
+            "dosePlan.gammaPassRate"
+          ],
+          "schedule": "manual",
+          "enabled": true
+        },
+        {
+          "id": "qa-risk-review",
+          "name": "质控风险复核",
+          "audience": "物理师",
+          "dataset": "qaReports",
+          "fields": [
+            "patientId",
+            "type",
+            "score",
+            "result",
+            "createdAt"
+          ],
+          "schedule": "daily",
+          "enabled": true
+        }
+      ],
+      "permissionMatrix": {
+        "registrar": {
+          "canEditPatients": true,
+          "canManageWorkflow": false,
+          "canApproveDeployments": false,
+          "canRollbackDeployments": false,
+          "canViewReports": true,
+          "workflowStepIds": [
+            "registration"
+          ]
+        },
+        "doctor": {
+          "canEditPatients": true,
+          "canManageWorkflow": false,
+          "canApproveDeployments": false,
+          "canRollbackDeployments": false,
+          "canViewReports": true,
+          "workflowStepIds": [
+            "consultation",
+            "contouring",
+            "follow-up"
+          ]
+        },
+        "physicist": {
+          "canEditPatients": true,
+          "canManageWorkflow": false,
+          "canApproveDeployments": false,
+          "canRollbackDeployments": false,
+          "canViewReports": true,
+          "workflowStepIds": [
+            "plan-design",
+            "physics-review"
+          ]
+        },
+        "technician": {
+          "canEditPatients": true,
+          "canManageWorkflow": false,
+          "canApproveDeployments": false,
+          "canRollbackDeployments": false,
+          "canViewReports": false,
+          "workflowStepIds": [
+            "ct-simulation",
+            "first-treatment"
+          ]
+        },
+        "director": {
+          "canEditPatients": true,
+          "canManageWorkflow": true,
+          "canApproveDeployments": true,
+          "canRollbackDeployments": true,
+          "canViewReports": true,
+          "workflowStepIds": [
+            "director-review"
+          ]
+        },
+        "nurse": {
+          "canEditPatients": true,
+          "canManageWorkflow": false,
+          "canApproveDeployments": false,
+          "canRollbackDeployments": false,
+          "canViewReports": true,
+          "workflowStepIds": [
+            "treatment-schedule",
+            "follow-up"
+          ]
+        }
+      }
+    },
+    "diff": [
+      {
+        "area": "workflow",
+        "action": "updated",
+        "id": "follow-up",
+        "title": "随访"
+      },
+      {
+        "area": "permissionMatrix",
+        "action": "updated",
+        "id": "nurse",
+        "title": "nurse"
+      }
+    ],
+    "approvals": []
+  },
+  "configDiff": [
+    {
+      "area": "workflow",
+      "action": "updated",
+      "id": "follow-up",
+      "title": "随访"
+    },
+    {
+      "area": "permissionMatrix",
+      "action": "updated",
+      "id": "nurse",
+      "title": "nurse"
+    }
+  ],
+  "workflowSnapshot": {
+    "id": "rt-standard",
+    "name": "放疗标准流程",
+    "activeVersion": 5,
+    "steps": [
+      {
+        "id": "registration",
+        "name": "患者登记",
+        "role": "registrar",
+        "slaHours": 4,
+        "formFieldCount": 2,
+        "qualityCheckCount": 2
+      },
+      {
+        "id": "consultation",
+        "name": "放疗会诊",
+        "role": "doctor",
+        "slaHours": 12,
+        "formFieldCount": 2,
+        "qualityCheckCount": 2
+      },
+      {
+        "id": "ct-simulation",
+        "name": "CT定位",
+        "role": "technician",
+        "slaHours": 24,
+        "formFieldCount": 2,
+        "qualityCheckCount": 2
+      },
+      {
+        "id": "contouring",
+        "name": "靶区勾画",
+        "role": "doctor",
+        "slaHours": 24,
+        "formFieldCount": 2,
+        "qualityCheckCount": 2
+      },
+      {
+        "id": "plan-design",
+        "name": "计划设计",
+        "role": "physicist",
+        "slaHours": 24,
+        "formFieldCount": 4,
+        "qualityCheckCount": 2
+      },
+      {
+        "id": "physics-review",
+        "name": "物理师审核",
+        "role": "physicist",
+        "slaHours": 12,
+        "formFieldCount": 2,
+        "qualityCheckCount": 2
+      },
+      {
+        "id": "director-review",
+        "name": "主任审核",
+        "role": "director",
+        "slaHours": 12,
+        "formFieldCount": 1,
+        "qualityCheckCount": 2
+      },
+      {
+        "id": "reset-verification",
+        "name": "复位验证",
+        "role": "technician",
+        "slaHours": 8,
+        "formFieldCount": 2,
+        "qualityCheckCount": 3
+      },
+      {
+        "id": "treatment-schedule",
+        "name": "治疗排程",
+        "role": "nurse",
+        "slaHours": 8,
+        "formFieldCount": 2,
+        "qualityCheckCount": 2
+      },
+      {
+        "id": "first-treatment",
+        "name": "首次治疗",
+        "role": "technician",
+        "slaHours": 8,
+        "formFieldCount": 1,
+        "qualityCheckCount": 2
+      },
+      {
+        "id": "follow-up",
+        "name": "随访",
+        "role": "doctor",
+        "slaHours": 168,
+        "formFieldCount": 2,
+        "qualityCheckCount": 2
+      }
+    ]
+  }
+}
