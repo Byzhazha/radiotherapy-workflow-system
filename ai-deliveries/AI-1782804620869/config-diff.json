@@ -1,0 +1,14 @@
+[
+  {
+    "area": "workflow",
+    "action": "updated",
+    "id": "follow-up",
+    "title": "随访"
+  },
+  {
+    "area": "permissionMatrix",
+    "action": "updated",
+    "id": "nurse",
+    "title": "nurse"
+  }
+]
