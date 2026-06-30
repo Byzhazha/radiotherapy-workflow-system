@@ -49,9 +49,9 @@ npm run dev
 AI 服务配置在 `.env`：
 
 ```env
-AI_BASE_URL=https://zz1cc.cc.cd/v1
+AI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 AI_API_KEY=your-server-side-key
-AI_MODEL=gpt-5.5
+AI_MODEL=qwen3.7-plus
 RT_API_PORT=8750
 RT_API_HOST=127.0.0.1
 GITEA_BASE_URL=https://gitea.jaycode.online
@@ -83,7 +83,7 @@ npm run build
 python3 scripts/deploy_server.py
 ```
 
-部署脚本会更新 `38.76.162.229` 上的 `rt-ai-workbench` 服务，服务端口为 `8750`。Gitea 仓库 Webhook 指向 Jenkins 任务的构建入口后，提交到 `main` 会自动完成验证、构建和远端服务更新。
+部署脚本会更新 `38.76.162.229` 上的 `rt-ai-workbench` 服务，服务端口为 `8750`。Gitea 仓库 Webhook 指向服务器上的 Jenkins relay，relay 收到 `main` 分支 push 事件后触发 Jenkins 任务，提交到 `main` 会自动完成验证、构建和远端服务更新。
 
 ## 验证
 
