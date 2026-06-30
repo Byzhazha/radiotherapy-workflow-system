@@ -39,7 +39,15 @@ const navItems = [
 const requirementSamples = [
   '给治疗排程前新增“复位验证”节点，由技师处理，必须记录IGRT结论和复位误差，超过8小时提醒护士长。',
   '在计划设计步骤新增“处方剂量备注”字段，并新增规则：处方剂量大于60Gy时要求主任审核。',
-  '新增一个“物理师二次复核”节点，放在主任审核之后、治疗排程之前，只有物理师处理，需要填写二次复核意见。'
+  '新增一个“物理师二次复核”节点，放在主任审核之后、治疗排程之前，只有物理师处理，需要填写二次复核意见。',
+  '在CT定位步骤新增“固定装置照片确认”必填字段，字段类型为选择项，选项包含已上传、待补拍、不适用。',
+  '把首次治疗步骤目标时间调整为12小时，并新增质控项：核对治疗机、计划号、首次摆位影像。',
+  '新增规则：Gamma通过率低于95%时阻断首次治疗，并提示物理师完成计划QA复核。',
+  '新增每周“高风险患者治疗准备报表”，面向科主任，包含患者、诊断、总剂量、当前节点和质控结果。',
+  '调整交付工作台页面布局，增加患者队列、规则风险、审批详情和报表模板四个区块，审批详情占两列。',
+  '给护士角色增加查看报表权限，并允许护士处理治疗排程和随访两个流程节点。',
+  '在随访步骤新增“不良反应等级”选择字段，选项为0级、1级、2级、3级、4级，2级及以上要求医生复核。',
+  '删除主任审核后的“物理师二次复核”节点，相关患者迁移到治疗排程，并保留删除原因用于交付审计。'
 ];
 
 function cx(...parts) {
@@ -632,6 +640,7 @@ function FollowUpView({ state }) {
 
 function CustomizationAssistant({ state, onRefresh }) {
   const [requirement, setRequirement] = useState(requirementSamples[0]);
+  const [currentJob, setCurrentJob] = useState(null);
   const [running, setRunning] = useState(false);
   const [approving, setApproving] = useState(false);
   const [rollingBackId, setRollingBackId] = useState('');
@@ -640,11 +649,13 @@ function CustomizationAssistant({ state, onRefresh }) {
   async function submitRequirement() {
     setRunning(true);
     setMessage('');
+    setCurrentJob(null);
     try {
       const createdJob = await api('/api/ai/jobs', {
         method: 'POST',
         body: JSON.stringify({ requirement })
       });
+      setCurrentJob(createdJob);
       await onRefresh();
       if (createdJob.status === 'completed') {
         setMessage('已生成沙箱预览，完成业务安全检查后可审批激活。');
@@ -666,13 +677,14 @@ function CustomizationAssistant({ state, onRefresh }) {
     setApproving(true);
     setMessage('');
     try {
-      await api(`/api/ai/jobs/${latestJob.id}/approve`, {
+      const approvedJob = await api(`/api/ai/jobs/${latestJob.id}/approve`, {
         method: 'POST',
         body: JSON.stringify({
           operator: 'delivery-manager',
           comment: '已核对预览差异、测试结果和审批清单。'
         })
       });
+      setCurrentJob(approvedJob);
       await onRefresh();
       setMessage('预览配置已审批并激活。');
     } catch (err) {
@@ -702,7 +714,7 @@ function CustomizationAssistant({ state, onRefresh }) {
     }
   }
 
-  const latestJob = state.aiJobs[0];
+  const latestJob = currentJob;
   const recentDeliveryLogs = state.auditLog
     .filter((log) => ['complete-ai-job', 'apply-change-plan', 'approve-ai-deployment', 'rollback-deployment'].includes(log.action))
     .slice(0, 5);
@@ -750,7 +762,7 @@ function CustomizationAssistant({ state, onRefresh }) {
 
       <section className="panel">
         <PanelHeader icon={Activity} title="执行结果" subtitle="展示沙箱预览、业务安全检查和审批状态" />
-        {latestJob ? <JobDetail job={latestJob} /> : <div className="empty-state">暂无AI变更任务。</div>}
+        {latestJob ? <JobDetail job={latestJob} /> : <div className="empty-state">本次还没有生成预览。</div>}
       </section>
 
       <section className="panel span-two">
