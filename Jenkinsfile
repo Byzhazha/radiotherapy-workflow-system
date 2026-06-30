@@ -7,15 +7,12 @@ pipeline {
     buildDiscarder(logRotator(numToKeepStr: '20'))
   }
 
-  environment {
-    PYTHONPATH = "${WORKSPACE}/.jenkins-python"
-  }
-
   stages {
     stage('Install') {
       steps {
         sh 'npm ci'
-        sh 'python3 -m pip install --target .jenkins-python paramiko'
+        sh 'python3 -m venv .venv'
+        sh '. .venv/bin/activate && python -m pip install --upgrade pip && python -m pip install paramiko'
       }
     }
 
@@ -35,7 +32,7 @@ pipeline {
       steps {
         // Deployment reuses the project script so Jenkins and manual releases
         // write the same remote service files, environment, and systemd unit.
-        sh 'python3 scripts/deploy_server.py'
+        sh '. .venv/bin/activate && python scripts/deploy_server.py'
       }
     }
   }
